@@ -1,16 +1,15 @@
 import React from 'react';
 import { 
-  LayoutDashboard, 
-  Receipt, 
-  Wallet, 
+  BarChart3, 
+  CreditCard, 
   TrendingUp, 
   ShieldCheck, 
   Building, 
+  Clock, 
   Sliders, 
   Settings,
   Bot,
-  User,
-  Plus
+  User
 } from 'lucide-react';
 
 export default function Navigation({ 
@@ -19,16 +18,18 @@ export default function Navigation({
   notebookLmConnected,
   profiles,
   activeProfile,
-  onSwitchProfile,
-  onCreateProfile
+  onSwitchProfile
 }) {
-  const navItems = [
-    { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-    { id: 'receipts', label: 'Receipt Vault', icon: Receipt },
-    { id: 'accounts', label: 'Accounts & Cards', icon: Wallet },
-    { id: 'savings', label: 'Savings & XIRR', icon: TrendingUp },
-    { id: 'pensions', label: 'Pension & Insurance', icon: ShieldCheck },
-    { id: 'realestate', label: 'Real Estate & Rent', icon: Building },
+  const categoryHubs = [
+    { id: 'overview', label: 'Executive Overview', icon: BarChart3 },
+    { id: 'expenses', label: 'Expenses Hub', icon: CreditCard },
+    { id: 'investments', label: 'Savings & Investments', icon: TrendingUp },
+    { id: 'pensions', label: 'Pensions & Insurances', icon: ShieldCheck },
+    { id: 'realestate', label: 'Real Estate & Mortgages', icon: Building },
+  ];
+
+  const utilities = [
+    { id: 'reminders', label: 'Reminders & Cadence', icon: Clock },
     { id: 'simulator', label: 'Scenario Simulator', icon: Sliders },
     { id: 'settings', label: 'Settings & Auth', icon: Settings },
   ];
@@ -47,7 +48,7 @@ export default function Navigation({
       top: 0
     }}>
       <div>
-        {/* Logo & Header */}
+        {/* Header & Logo */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1.25rem', paddingLeft: '0.25rem' }}>
           <div style={{
             width: '38px',
@@ -65,11 +66,11 @@ export default function Navigation({
           </div>
           <div>
             <h2 style={{ fontSize: '1.05rem', fontWeight: 700, color: 'white', lineHeight: 1.2 }}>Home Finance</h2>
-            <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>BookLM Tower</span>
+            <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>BookLM Hubs</span>
           </div>
         </div>
 
-        {/* Profile Switcher Box */}
+        {/* Profile Switcher */}
         <div className="glass-card" style={{ padding: '0.75rem', marginBottom: '1.25rem', borderColor: 'rgba(99, 102, 241, 0.3)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginBottom: '0.35rem' }}>
             <User size={14} color="#818cf8" />
@@ -98,9 +99,12 @@ export default function Navigation({
           </select>
         </div>
 
-        {/* Navigation Items */}
-        <nav style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
-          {navItems.map((item) => {
+        {/* Category Hubs Section */}
+        <span style={{ fontSize: '0.7rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', paddingLeft: '0.5rem', display: 'block', marginBottom: '0.4rem' }}>
+          Financial Hubs
+        </span>
+        <nav style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', marginBottom: '1.25rem' }}>
+          {categoryHubs.map((item) => {
             const Icon = item.icon;
             const isActive = activeTab === item.id;
             return (
@@ -111,7 +115,7 @@ export default function Navigation({
                   display: 'flex',
                   alignItems: 'center',
                   gap: '0.75rem',
-                  padding: '0.7rem 0.85rem',
+                  padding: '0.65rem 0.85rem',
                   borderRadius: '10px',
                   border: 'none',
                   background: isActive ? 'linear-gradient(135deg, rgba(99, 102, 241, 0.25) 0%, rgba(99, 102, 241, 0.1) 100%)' : 'transparent',
@@ -124,7 +128,43 @@ export default function Navigation({
                   borderLeft: isActive ? '3px solid #6366f1' : '3px solid transparent'
                 }}
               >
-                <Icon size={18} color={isActive ? '#818cf8' : '#94a3b8'} />
+                <Icon size={17} color={isActive ? '#818cf8' : '#94a3b8'} />
+                {item.label}
+              </button>
+            );
+          })}
+        </nav>
+
+        {/* Standalone Utilities */}
+        <span style={{ fontSize: '0.7rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', paddingLeft: '0.5rem', display: 'block', marginBottom: '0.4rem' }}>
+          Tools & Utilities
+        </span>
+        <nav style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+          {utilities.map((item) => {
+            const Icon = item.icon;
+            const isActive = activeTab === item.id;
+            return (
+              <button
+                key={item.id}
+                onClick={() => setActiveTab(item.id)}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.75rem',
+                  padding: '0.65rem 0.85rem',
+                  borderRadius: '10px',
+                  border: 'none',
+                  background: isActive ? 'linear-gradient(135deg, rgba(99, 102, 241, 0.25) 0%, rgba(99, 102, 241, 0.1) 100%)' : 'transparent',
+                  color: isActive ? '#818cf8' : '#94a3b8',
+                  fontWeight: isActive ? 600 : 500,
+                  fontSize: '0.85rem',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease',
+                  textAlign: 'left',
+                  borderLeft: isActive ? '3px solid #6366f1' : '3px solid transparent'
+                }}
+              >
+                <Icon size={17} color={isActive ? '#818cf8' : '#94a3b8'} />
                 {item.label}
               </button>
             );

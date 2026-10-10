@@ -24,7 +24,7 @@ export default function SettingsView({
 
   useEffect(() => {
     // Load per-profile settings JSON
-    axios.get('http://127.0.0.1:8000/api/settings')
+    axios.get('http://127.0.0.1:8900/api/settings')
       .then(res => {
         const data = res.data;
         if (data.theme) setTheme(data.theme);
@@ -38,7 +38,7 @@ export default function SettingsView({
   const saveNotebookId = async (newId) => {
     setNotebookId(newId);
     try {
-      const resp = await axios.post('http://127.0.0.1:8000/api/settings', {
+      const resp = await axios.post('http://127.0.0.1:8900/api/settings', {
         key: 'notebooklm_notebook_id',
         value: newId
       });
@@ -57,7 +57,7 @@ export default function SettingsView({
       ? cards.filter(c => c !== cardKey) 
       : [...cards, cardKey];
     setCards(newCards);
-    axios.post('http://127.0.0.1:8000/api/settings/full', {
+    axios.post('http://127.0.0.1:8900/api/settings/full', {
       theme,
       chart_type: chartType,
       dashboard_cards: newCards,
@@ -67,17 +67,17 @@ export default function SettingsView({
 
   const handleThemeChange = (newTheme) => {
     setTheme(newTheme);
-    axios.post('http://127.0.0.1:8000/api/settings', { key: 'theme', value: newTheme }).catch(() => {});
+    axios.post('http://127.0.0.1:8900/api/settings', { key: 'theme', value: newTheme }).catch(() => {});
   };
 
   const handleChartTypeChange = (newChart) => {
     setChartType(newChart);
-    axios.post('http://127.0.0.1:8000/api/settings', { key: 'chart_type', value: newChart }).catch(() => {});
+    axios.post('http://127.0.0.1:8900/api/settings', { key: 'chart_type', value: newChart }).catch(() => {});
   };
 
   const launchChromiumAuth = async () => {
     try {
-      await axios.post('http://127.0.0.1:8000/api/notebooklm/launch-auth-browser');
+      await axios.post('http://127.0.0.1:8900/api/notebooklm/launch-auth-browser');
       setNotebookLmConnected(true);
     } catch (err) {
       setNotebookLmConnected(true);
@@ -87,7 +87,7 @@ export default function SettingsView({
   const handleScanRetro = async () => {
     setScanningRetro(true);
     try {
-      const resp = await axios.post('http://127.0.0.1:8000/api/notebooklm/scan-retro');
+      const resp = await axios.post('http://127.0.0.1:8900/api/notebooklm/scan-retro');
       setRetroData(resp.data);
       setRetroPreviewActive(true);
     } catch (err) {
@@ -112,7 +112,7 @@ export default function SettingsView({
   const handleApproveRetro = async () => {
     if (!retroData) return;
     try {
-      await axios.post('http://127.0.0.1:8000/api/notebooklm/commit-retro', { items: retroData.items });
+      await axios.post('http://127.0.0.1:8900/api/notebooklm/commit-retro', { items: retroData.items });
       alert('Retroactive history approved and committed to active profile database!');
     } catch (err) {
       alert('Retroactive history committed to DB!');
@@ -123,7 +123,7 @@ export default function SettingsView({
 
   const handleExportDB = async () => {
     try {
-      const resp = await axios.get('http://127.0.0.1:8000/api/settings/database/export');
+      const resp = await axios.get('http://127.0.0.1:8900/api/settings/database/export');
       const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(resp.data, null, 2));
       const downloadAnchor = document.createElement('a');
       downloadAnchor.setAttribute("href", dataStr);
@@ -142,7 +142,7 @@ export default function SettingsView({
     const formData = new FormData();
     formData.append('file', file);
     try {
-      await axios.post('http://127.0.0.1:8000/api/settings/database/import', formData);
+      await axios.post('http://127.0.0.1:8900/api/settings/database/import', formData);
       alert('Database backup restored to active profile successfully!');
     } catch (err) {
       alert('Database backup restored!');
@@ -151,7 +151,7 @@ export default function SettingsView({
 
   const handleClearDB = async () => {
     try {
-      await axios.post('http://127.0.0.1:8000/api/settings/database/clear');
+      await axios.post('http://127.0.0.1:8900/api/settings/database/clear');
       alert(`Database for profile "${activeProfile?.name}" reset completely.`);
     } catch (err) {
       alert('Database cleared.');

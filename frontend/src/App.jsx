@@ -2,16 +2,19 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import Navigation from './components/Navigation';
 import DashboardView from './components/DashboardView';
-import ReceiptsView from './components/ReceiptsView';
-import AccountsView from './components/AccountsView';
-import SavingsXirrView from './components/SavingsXirrView';
+import ExpensesView from './components/ExpensesView';
+import InvestmentsView from './components/InvestmentsView';
 import PensionsInsuranceView from './components/PensionsInsuranceView';
-import RealEstateSimulatorView from './components/RealEstateSimulatorView';
+import RealEstateView from './components/RealEstateView';
+import RemindersView from './components/RemindersView';
+import SimulatorView from './components/SimulatorView';
 import SettingsView from './components/SettingsView';
 import { AlertTriangle, RefreshCw, CheckCircle2 } from 'lucide-react';
 
+const API_BASE = 'http://127.0.0.1:8900';
+
 export default function App() {
-  const [activeTab, setActiveTab] = useState('dashboard');
+  const [activeTab, setActiveTab] = useState('overview');
   const [notebookLmConnected, setNotebookLmConnected] = useState(true);
   const [fxRate, setFxRate] = useState(3.65);
   const [retroPreviewActive, setRetroPreviewActive] = useState(false);
@@ -26,17 +29,17 @@ export default function App() {
 
   useEffect(() => {
     // Fetch live USD/ILS rate from FastAPI backend
-    axios.get('http://127.0.0.1:8000/api/xirr/fx-rate')
+    axios.get(`${API_BASE}/api/xirr/fx-rate`)
       .then(res => setFxRate(res.data.rate))
       .catch(() => setFxRate(3.65));
 
     // Check NotebookLM chromium status
-    axios.get('http://127.0.0.1:8000/api/notebooklm/status')
+    axios.get(`${API_BASE}/api/notebooklm/status`)
       .then(res => setNotebookLmConnected(res.data.authenticated))
       .catch(() => setNotebookLmConnected(true));
 
     // Fetch Profiles
-    axios.get('http://127.0.0.1:8000/api/profiles')
+    axios.get(`${API_BASE}/api/profiles`)
       .then(res => {
         setProfiles(res.data);
         const active = res.data.find(p => p.is_active) || res.data[0];
@@ -51,12 +54,12 @@ export default function App() {
     setActiveProfile(target);
 
     // Call API activate profile
-    axios.post(`http://127.0.0.1:8000/api/profiles/${profileId}/activate`)
+    axios.post(`${API_BASE}/api/profiles/${profileId}/activate`)
       .catch(() => {});
   };
 
   const handleCreateProfile = (name) => {
-    axios.post('http://127.0.0.1:8000/api/profiles', { name })
+    axios.post(`${API_BASE}/api/profiles`, { name })
       .then(res => {
         setProfiles(prev => [...prev, res.data]);
         handleSwitchProfile(res.data.id);
@@ -68,19 +71,20 @@ export default function App() {
 
   const renderActiveView = () => {
     switch (activeTab) {
-      case 'dashboard':
+      case 'overview':
         return <DashboardView fxRate={fxRate} retroPreviewActive={retroPreviewActive} retroData={retroData} isCleanProfile={isCleanProfile} />;
-      case 'receipts':
-        return <ReceiptsView isCleanProfile={isCleanProfile} />;
-      case 'accounts':
-        return <AccountsView isCleanProfile={isCleanProfile} />;
-      case 'savings':
-        return <SavingsXirrView fxRate={fxRate} isCleanProfile={isCleanProfile} />;
+      case 'expenses':
+        return <ExpensesView isCleanProfile={isCleanProfile} />;
+      case 'investments':
+        return <InvestmentsView fxRate={fxRate} isCleanProfile={isCleanProfile} />;
       case 'pensions':
         return <PensionsInsuranceView isCleanProfile={isCleanProfile} />;
       case 'realestate':
+        return <RealEstateView isCleanProfile={isCleanProfile} />;
+      case 'reminders':
+        return <RemindersView />;
       case 'simulator':
-        return <RealEstateSimulatorView isCleanProfile={isCleanProfile} />;
+        return <SimulatorView />;
       case 'settings':
         return <SettingsView 
                  notebookLmConnected={notebookLmConnected} 
