@@ -8,6 +8,7 @@ import PensionsInsuranceView from './components/PensionsInsuranceView';
 import RealEstateView from './components/RealEstateView';
 import RemindersView from './components/RemindersView';
 import SimulatorView from './components/SimulatorView';
+import ReceiptsView from './components/ReceiptsView';
 import SettingsView from './components/SettingsView';
 import { AlertTriangle, RefreshCw, CheckCircle2 } from 'lucide-react';
 
@@ -75,6 +76,8 @@ export default function App() {
         return <DashboardView fxRate={fxRate} retroPreviewActive={retroPreviewActive} retroData={retroData} isCleanProfile={isCleanProfile} />;
       case 'expenses':
         return <ExpensesView isCleanProfile={isCleanProfile} />;
+      case 'receipts':
+        return <ReceiptsView isCleanProfile={isCleanProfile} />;
       case 'investments':
         return <InvestmentsView fxRate={fxRate} isCleanProfile={isCleanProfile} />;
       case 'pensions':

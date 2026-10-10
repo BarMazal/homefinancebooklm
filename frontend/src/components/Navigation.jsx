@@ -9,7 +9,8 @@ import {
   Sliders, 
   Settings,
   Bot,
-  User
+  User,
+  Receipt
 } from 'lucide-react';
 
 export default function Navigation({ 
@@ -29,6 +30,7 @@ export default function Navigation({
   ];
 
   const utilities = [
+    { id: 'receipts', label: 'Receipt Vault', icon: Receipt },
     { id: 'reminders', label: 'Reminders & Cadence', icon: Clock },
     { id: 'simulator', label: 'Scenario Simulator', icon: Sliders },
     { id: 'settings', label: 'Settings & Auth', icon: Settings },
