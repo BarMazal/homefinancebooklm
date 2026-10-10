@@ -66,3 +66,17 @@
 - **NFR-1 (Privacy & Local First)**: All financial records stored locally in SQLite (`data/homefinance.db`).
 - **NFR-2 (Performance)**: Dashboard load time < 1 second; receipt parsing & OCR < 5 seconds per image.
 - **NFR-3 (Responsiveness)**: Modern, glassmorphic dark-mode web interface optimized for desktop and tablet screens.
+
+---
+
+## 5. Future Backlog: Specialized AI Advisors Module (Phase 2+)
+
+- **BL-1.1: General Finance Advisor**:
+  - Contextual AI advisor analyzing monthly spending cuts, cashflow leaks, emergency fund sizing, and budget optimization recommendations via NotebookLM RAG prompts.
+- **BL-1.2: Pensions Advisor**:
+  - Specialized AI agent analyzing management fee reduction strategies, pension track choices (e.g. S&P500 track vs. General track), employer match optimization, and retirement gap projections.
+- **BL-1.3: Mortgage Advisor**:
+  - AI assistant evaluating active mortgage tracks, monitoring market interest rate shifts, and flagging refinancing opportunities (e.g. converting CPI-linked tracks to fixed tracks when inflation rises).
+- **BL-1.4: Real Estate Advisor**:
+  - AI advisor evaluating property portfolio performance, net rental yields, local market appreciation, and tax-efficient real estate vs. stock market capital deployment.
+
