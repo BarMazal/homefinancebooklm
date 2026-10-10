@@ -14,6 +14,24 @@ const expenseCuts = [
   { name: 'Dining & Entertainment', value: 1800, color: '#f43f5e' }
 ];
 
+const totalExpenseSum = expenseCuts.reduce((acc, curr) => acc + curr.value, 0);
+
+const CustomPieTooltip = ({ active, payload }) => {
+  if (active && payload && payload.length) {
+    const data = payload[0].payload;
+    const pct = ((data.value / totalExpenseSum) * 100).toFixed(1);
+    return (
+      <div style={{ background: '#1e293b', border: '1px solid rgba(255,255,255,0.15)', padding: '0.6rem 0.85rem', borderRadius: '8px', color: 'white', boxShadow: '0 4px 12px rgba(0,0,0,0.5)' }}>
+        <p style={{ fontWeight: 700, margin: 0, fontSize: '0.9rem', color: '#f8fafc' }}>{data.name}</p>
+        <p style={{ margin: '0.2rem 0 0', color: '#34d399', fontSize: '0.85rem', fontWeight: 600 }}>
+          ₪ {data.value.toLocaleString()} ({pct}%)
+        </p>
+      </div>
+    );
+  }
+  return null;
+};
+
 const monthlyCashFlow = [
   { month: 'May', Income: 32000, Expense: 21200 },
   { month: 'Jun', Income: 32000, Expense: 22800 },
@@ -94,16 +112,14 @@ export default function DashboardView({ fxRate }) {
                   outerRadius={95}
                   paddingAngle={5}
                   dataKey="value"
+                  nameKey="name"
                 >
                   {expenseCuts.map((entry, index) => (
                     <Cell key={`cell-${index}`} fill={entry.color} />
                   ))}
                 </Pie>
-                <Tooltip 
-                  formatter={(val) => [`₪ ${val.toLocaleString()}`, 'Amount']} 
-                  contentStyle={{ background: '#1e293b', borderColor: 'rgba(255,255,255,0.1)', borderRadius: '8px' }}
-                />
-                <Legend />
+                <Tooltip content={<CustomPieTooltip />} />
+                <Legend formatter={(value) => <span style={{ color: '#cbd5e1', fontSize: '0.85rem' }}>{value}</span>} />
               </PieChart>
             </ResponsiveContainer>
           </div>
