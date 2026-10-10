@@ -21,13 +21,13 @@ if ($portFrontend) {
 }
 
 Write-Host "[+] Starting FastAPI Backend Server on http://127.0.0.1:$backendPort ..." -ForegroundColor Green
-Start-Process -FilePath "cmd.exe" -ArgumentList "/k venv\Scripts\activate.bat && uvicorn app.main:app --reload --port $backendPort" -WorkingDirectory (Get-Location).Path
+Start-Process -FilePath "cmd.exe" -ArgumentList "/c venv\Scripts\activate.bat && uvicorn app.main:app --reload --port $backendPort" -WorkingDirectory (Get-Location).Path -WindowStyle Hidden
 
 Write-Host "[+] Starting Vite Frontend Server on http://localhost:$frontendPort ..." -ForegroundColor Green
-Start-Process -FilePath "cmd.exe" -ArgumentList "/k cd frontend && npm run dev" -WorkingDirectory (Get-Location).Path
+Start-Process -FilePath "cmd.exe" -ArgumentList "/c cd frontend && npm run dev" -WorkingDirectory (Get-Location).Path -WindowStyle Hidden
 
 Write-Host "===================================================" -ForegroundColor Cyan
-Write-Host "  Application Launched!" -ForegroundColor Green
+Write-Host "  Application Launched (No Extra Windows)!" -ForegroundColor Green
 Write-Host "  Dashboard UI: http://localhost:$frontendPort" -ForegroundColor Yellow
 Write-Host "  API Docs:     http://127.0.0.1:$backendPort/docs" -ForegroundColor Yellow
 Write-Host "===================================================" -ForegroundColor Cyan
