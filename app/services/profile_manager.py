@@ -37,7 +37,7 @@ class ProfileManager:
             for p in DEFAULT_PROFILES:
                 self.get_profile_dir(p["id"])
 
-    def get_profiles_data((self)) -> Dict[str, Any]:
+    def get_profiles_data(self) -> Dict[str, Any]:
         self._ensure_profiles_json()
         try:
             with open(PROFILES_FILE, "r", encoding="utf-8") as f:
