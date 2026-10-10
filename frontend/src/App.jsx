@@ -68,7 +68,7 @@ export default function App() {
       .catch(() => {});
   };
 
-  const isCleanProfile = activeProfile?.id === 2;
+  const isCleanProfile = activeProfile?.id !== 1;
 
   const renderActiveView = () => {
     switch (activeTab) {

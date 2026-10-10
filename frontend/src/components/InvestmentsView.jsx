@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { TrendingUp, RefreshCw, HelpCircle, CheckCircle2, Building2 } from 'lucide-react';
 
-const xirrData = [
+const demoXirrData = [
   { year: '2021', Balance: 120000, Deposited: 110000 },
   { year: '2022', Balance: 185000, Deposited: 160000 },
   { year: '2023', Balance: 270000, Deposited: 220000 },
@@ -16,13 +16,15 @@ export default function InvestmentsView({ fxRate, isCleanProfile }) {
   const [returnRate, setReturnRate] = useState(7.5);
 
   const calculateKids18Years = () => {
-    let balance = 5000;
+    let balance = isCleanProfile ? 0 : 5000;
     const rate = returnRate / 100 / 12;
     for (let i = 0; i < 18 * 12; i++) {
       balance = (balance + kidsDeposit) * (1 + rate);
     }
     return Math.round(balance);
   };
+
+  const xirrData = isCleanProfile ? [] : demoXirrData;
 
   return (
     <div style={{ padding: '2rem', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
@@ -35,8 +37,12 @@ export default function InvestmentsView({ fxRate, isCleanProfile }) {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1rem' }}>
         <div className="glass-panel" style={{ padding: '1.25rem' }}>
           <span style={{ color: '#94a3b8', fontSize: '0.85rem' }}>Portfolio XIRR (Annual)</span>
-          <h2 style={{ fontSize: '1.8rem', color: '#34d399', marginTop: '0.25rem' }}>+ 8.65 %</h2>
-          <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>Real compounding yield in ILS</span>
+          <h2 style={{ fontSize: '1.8rem', color: isCleanProfile ? '#94a3b8' : '#34d399', marginTop: '0.25rem' }}>
+            {isCleanProfile ? '0.00 %' : '+ 8.65 %'}
+          </h2>
+          <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
+            {isCleanProfile ? 'No active investment history' : 'Real compounding yield in ILS'}
+          </span>
         </div>
 
         <div className="glass-panel" style={{ padding: '1.25rem' }}>
@@ -55,26 +61,38 @@ export default function InvestmentsView({ fxRate, isCleanProfile }) {
 
         <div className="glass-panel" style={{ padding: '1.25rem' }}>
           <span style={{ color: '#94a3b8', fontSize: '0.85rem' }}>Total Portfolio Valuation</span>
-          <h2 style={{ fontSize: '1.8rem', color: 'white', marginTop: '0.25rem' }}>₪ 685,000</h2>
-          <span style={{ fontSize: '0.75rem', color: '#34d399' }}>₪ 215,000 cumulative gains</span>
+          <h2 style={{ fontSize: '1.8rem', color: 'white', marginTop: '0.25rem' }}>
+            {isCleanProfile ? '₪ 0' : '₪ 685,000'}
+          </h2>
+          <span style={{ fontSize: '0.75rem', color: isCleanProfile ? '#94a3b8' : '#34d399' }}>
+            {isCleanProfile ? '₪ 0 cumulative gains' : '₪ 215,000 cumulative gains'}
+          </span>
         </div>
       </div>
 
-      {/* Portfolio Growth Area Chart */}
+      {/* Portfolio Growth Area Chart / Empty State */}
       <div className="glass-panel" style={{ padding: '1.5rem' }}>
         <h3 style={{ fontSize: '1.1rem', color: 'white', marginBottom: '1rem' }}>Portfolio Valuation vs Cash Deposited</h3>
-        <div style={{ width: '100%', height: 300 }}>
-          <ResponsiveContainer>
-            <AreaChart data={xirrData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
-              <XAxis dataKey="year" stroke="#94a3b8" />
-              <YAxis stroke="#94a3b8" />
-              <Tooltip contentStyle={{ background: '#1e293b', borderColor: 'rgba(255,255,255,0.1)', borderRadius: '8px' }} />
-              <Area type="monotone" dataKey="Balance" stroke="#34d399" fill="rgba(16, 185, 129, 0.2)" />
-              <Area type="monotone" dataKey="Deposited" stroke="#6366f1" fill="rgba(99, 102, 241, 0.1)" />
-            </AreaChart>
-          </ResponsiveContainer>
-        </div>
+        {xirrData.length === 0 ? (
+          <div className="glass-card" style={{ textAlign: 'center', padding: '3.5rem', color: '#94a3b8' }}>
+            <TrendingUp size={32} color="#6366f1" style={{ margin: '0 auto 0.75rem' }} />
+            <h3 style={{ color: 'white', fontSize: '1.1rem', marginBottom: '0.25rem' }}>No Investment Portfolio Logged in Active Profile</h3>
+            <p style={{ fontSize: '0.85rem' }}>Use the guided export wizard below to import brokerage CSV files or deposit statements.</p>
+          </div>
+        ) : (
+          <div style={{ width: '100%', height: 300 }}>
+            <ResponsiveContainer>
+              <AreaChart data={xirrData}>
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+                <XAxis dataKey="year" stroke="#94a3b8" />
+                <YAxis stroke="#94a3b8" />
+                <Tooltip contentStyle={{ background: '#1e293b', borderColor: 'rgba(255,255,255,0.1)', borderRadius: '8px' }} />
+                <Area type="monotone" dataKey="Balance" stroke="#34d399" fill="rgba(16, 185, 129, 0.2)" />
+                <Area type="monotone" dataKey="Deposited" stroke="#6366f1" fill="rgba(99, 102, 241, 0.1)" />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        )}
       </div>
 
       {/* Kids Savings 18-Year Compound Simulator */}

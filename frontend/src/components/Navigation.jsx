@@ -97,7 +97,7 @@ export default function Navigation({
           >
             {profiles.map(p => (
               <option key={p.id} value={p.id}>
-                {p.name} {p.id === 2 ? ' (Clean Slate)' : ''}
+                {p.name}
               </option>
             ))}
           </select>
