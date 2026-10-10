@@ -107,3 +107,8 @@ class SimulatorRequest(BaseModel):
     interest_rate_mortgage: float = 4.5 # % mortgage interest rate
     years: int = 10
     divorce_split_ratio: float = 0.5 # 50/50 split
+
+class RetroCommitRequest(BaseModel):
+    items: List[Dict[str, Any]]
+    account_id: int = 1
+
