@@ -10,7 +10,8 @@ import {
   Settings,
   Bot,
   User,
-  Receipt
+  Receipt,
+  Plus
 } from 'lucide-react';
 
 export default function Navigation({ 
@@ -90,7 +91,8 @@ export default function Navigation({
               color: 'white',
               fontSize: '0.8rem',
               fontWeight: 600,
-              cursor: 'pointer'
+              cursor: 'pointer',
+              marginBottom: '0.5rem'
             }}
           >
             {profiles.map(p => (
@@ -99,6 +101,31 @@ export default function Navigation({
               </option>
             ))}
           </select>
+          <button
+            onClick={() => {
+              const name = prompt('Enter name for new profile (e.g., Business, Taxes, Family):');
+              if (name && name.trim()) {
+                onCreateProfile(name.trim());
+              }
+            }}
+            style={{
+              width: '100%',
+              padding: '0.35rem',
+              borderRadius: '6px',
+              background: 'rgba(99, 102, 241, 0.2)',
+              border: '1px dashed rgba(99, 102, 241, 0.5)',
+              color: '#818cf8',
+              fontSize: '0.75rem',
+              fontWeight: 600,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '0.35rem'
+            }}
+          >
+            <Plus size={14} /> Add New Profile
+          </button>
         </div>
 
         {/* Category Hubs Section */}

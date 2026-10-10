@@ -3,9 +3,9 @@ import {
   PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend,
   BarChart, Bar, XAxis, YAxis, CartesianGrid
 } from 'recharts';
-import { Wallet, TrendingUp, AlertTriangle, ArrowUpRight, ArrowDownRight, RefreshCw } from 'lucide-react';
+import { Wallet, TrendingUp, AlertTriangle, ArrowUpRight, ArrowDownRight, RefreshCw, FolderPlus, Upload } from 'lucide-react';
 
-const expenseCuts = [
+const demoExpenseCuts = [
   { name: 'Groceries & Supermarket', value: 4200, color: '#10b981' },
   { name: 'Housing & Utilities', value: 5800, color: '#6366f1' },
   { name: 'Kids & Education', value: 3100, color: '#f59e0b' },
@@ -14,25 +14,7 @@ const expenseCuts = [
   { name: 'Dining & Entertainment', value: 1800, color: '#f43f5e' }
 ];
 
-const totalExpenseSum = expenseCuts.reduce((acc, curr) => acc + curr.value, 0);
-
-const CustomPieTooltip = ({ active, payload }) => {
-  if (active && payload && payload.length) {
-    const data = payload[0].payload;
-    const pct = ((data.value / totalExpenseSum) * 100).toFixed(1);
-    return (
-      <div style={{ background: '#1e293b', border: '1px solid rgba(255,255,255,0.15)', padding: '0.6rem 0.85rem', borderRadius: '8px', color: 'white', boxShadow: '0 4px 12px rgba(0,0,0,0.5)' }}>
-        <p style={{ fontWeight: 700, margin: 0, fontSize: '0.9rem', color: '#f8fafc' }}>{data.name}</p>
-        <p style={{ margin: '0.2rem 0 0', color: '#34d399', fontSize: '0.85rem', fontWeight: 600 }}>
-          ₪ {data.value.toLocaleString()} ({pct}%)
-        </p>
-      </div>
-    );
-  }
-  return null;
-};
-
-const monthlyCashFlow = [
+const demoMonthlyCashFlow = [
   { month: 'May', Income: 32000, Expense: 21200 },
   { month: 'Jun', Income: 32000, Expense: 22800 },
   { month: 'Jul', Income: 34500, Expense: 20500 },
@@ -41,7 +23,7 @@ const monthlyCashFlow = [
   { month: 'Oct', Income: 35000, Expense: 21200 }
 ];
 
-const uploadStatus = [
+const demoUploadStatus = [
   { name: 'Bank Leumi Main', status: 'ok', lastUpload: '2 days ago' },
   { name: 'Isracard Credit', status: 'warning', lastUpload: '18 days ago' },
   { name: 'Max Executive Card', status: 'missing', lastUpload: '34 days ago (Sep Missing)' },
@@ -49,7 +31,29 @@ const uploadStatus = [
   { name: 'Receipts Vault', status: 'warning', lastUpload: '12 days ago' },
 ];
 
-export default function DashboardView({ fxRate }) {
+export default function DashboardView({ fxRate, isCleanProfile }) {
+  const expenseCuts = isCleanProfile ? [] : demoExpenseCuts;
+  const monthlyCashFlow = isCleanProfile ? [] : demoMonthlyCashFlow;
+  const uploadStatus = isCleanProfile ? [] : demoUploadStatus;
+
+  const totalExpenseSum = expenseCuts.reduce((acc, curr) => acc + curr.value, 0);
+
+  const CustomPieTooltip = ({ active, payload }) => {
+    if (active && payload && payload.length) {
+      const data = payload[0].payload;
+      const pct = totalExpenseSum ? ((data.value / totalExpenseSum) * 100).toFixed(1) : 0;
+      return (
+        <div style={{ background: '#1e293b', border: '1px solid rgba(255,255,255,0.15)', padding: '0.6rem 0.85rem', borderRadius: '8px', color: 'white', boxShadow: '0 4px 12px rgba(0,0,0,0.5)' }}>
+          <p style={{ fontWeight: 700, margin: 0, fontSize: '0.9rem', color: '#f8fafc' }}>{data.name}</p>
+          <p style={{ margin: '0.2rem 0 0', color: '#34d399', fontSize: '0.85rem', fontWeight: 600 }}>
+            ₪ {data.value.toLocaleString()} ({pct}%)
+          </p>
+        </div>
+      );
+    }
+    return null;
+  };
+
   return (
     <div style={{ padding: '2rem', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
       {/* Header */}
@@ -65,36 +69,52 @@ export default function DashboardView({ fxRate }) {
         </div>
       </div>
 
+      {isCleanProfile && (
+        <div className="glass-panel" style={{ padding: '1.5rem', borderColor: '#6366f1', background: 'rgba(99, 102, 241, 0.08)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+            <FolderPlus size={24} color="#818cf8" />
+            <div>
+              <h3 style={{ fontSize: '1.1rem', color: 'white', fontWeight: 600 }}>Clean Slate Profile Active</h3>
+              <p style={{ fontSize: '0.85rem', color: '#cbd5e1' }}>
+                This profile has no transactions yet. Go to <strong>Settings & Auth</strong> to run <strong>"Scan NotebookLM History"</strong>, or use <strong>Expenses Hub</strong> to upload receipts/statements!
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Summary KPI Cards */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1rem' }}>
         <div className="glass-panel" style={{ padding: '1.25rem' }}>
           <span style={{ color: '#94a3b8', fontSize: '0.85rem' }}>Total Net Worth</span>
-          <h2 style={{ fontSize: '1.8rem', color: 'white', marginTop: '0.25rem' }}>₪ 1,450,000</h2>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', color: '#34d399', fontSize: '0.8rem', marginTop: '0.5rem' }}>
-            <ArrowUpRight size={14} /> +4.2% this quarter
-          </div>
+          <h2 style={{ fontSize: '1.8rem', color: 'white', marginTop: '0.25rem' }}>
+            {isCleanProfile ? '₪ 0' : '₪ 1,450,000'}
+          </h2>
+          <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>{isCleanProfile ? 'Awaiting Data Import' : 'Consolidated Assets'}</span>
         </div>
 
         <div className="glass-panel" style={{ padding: '1.25rem' }}>
           <span style={{ color: '#94a3b8', fontSize: '0.85rem' }}>Monthly Net Savings</span>
-          <h2 style={{ fontSize: '1.8rem', color: '#34d399', marginTop: '0.25rem' }}>₪ 13,800</h2>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', color: '#34d399', fontSize: '0.8rem', marginTop: '0.5rem' }}>
-            <ArrowUpRight size={14} /> 39.4% savings rate
-          </div>
+          <h2 style={{ fontSize: '1.8rem', color: '#34d399', marginTop: '0.25rem' }}>
+            {isCleanProfile ? '₪ 0' : '₪ 13,800'}
+          </h2>
+          <span style={{ fontSize: '0.75rem', color: '#34d399' }}>{isCleanProfile ? '0% savings rate' : '39.4% savings rate'}</span>
         </div>
 
         <div className="glass-panel" style={{ padding: '1.25rem' }}>
           <span style={{ color: '#94a3b8', fontSize: '0.85rem' }}>Monthly Total Expenses</span>
-          <h2 style={{ fontSize: '1.8rem', color: '#fb7185', marginTop: '0.25rem' }}>₪ 21,200</h2>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', color: '#fb7185', fontSize: '0.8rem', marginTop: '0.5rem' }}>
-            <ArrowDownRight size={14} /> -3.1% vs last month
-          </div>
+          <h2 style={{ fontSize: '1.8rem', color: '#fb7185', marginTop: '0.25rem' }}>
+            {isCleanProfile ? '₪ 0' : '₪ 21,200'}
+          </h2>
+          <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>{isCleanProfile ? '0 items logged' : '-3.1% vs last month'}</span>
         </div>
 
         <div className="glass-panel" style={{ padding: '1.25rem' }}>
           <span style={{ color: '#94a3b8', fontSize: '0.85rem' }}>Portfolios XIRR (Annual)</span>
-          <h2 style={{ fontSize: '1.8rem', color: '#818cf8', marginTop: '0.25rem' }}>8.65 %</h2>
-          <span style={{ fontSize: '0.8rem', color: '#94a3b8' }}>Weighted 4 Savings + Stocks</span>
+          <h2 style={{ fontSize: '1.8rem', color: '#818cf8', marginTop: '0.25rem' }}>
+            {isCleanProfile ? '0.00 %' : '8.65 %'}
+          </h2>
+          <span style={{ fontSize: '0.8rem', color: '#94a3b8' }}>{isCleanProfile ? 'No active cashflows' : 'Weighted Savings + Stocks'}</span>
         </div>
       </div>
 
@@ -103,71 +123,55 @@ export default function DashboardView({ fxRate }) {
         {/* Donut Chart: Expense Cuts */}
         <div className="glass-panel" style={{ padding: '1.5rem' }}>
           <h3 style={{ fontSize: '1.1rem', color: 'white', marginBottom: '1rem' }}>Expense Cuts by Category</h3>
-          <div style={{ width: '100%', height: 280 }}>
-            <ResponsiveContainer>
-              <PieChart>
-                <Pie
-                  data={expenseCuts}
-                  innerRadius={65}
-                  outerRadius={95}
-                  paddingAngle={5}
-                  dataKey="value"
-                  nameKey="name"
-                >
-                  {expenseCuts.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.color} />
-                  ))}
-                </Pie>
-                <Tooltip content={<CustomPieTooltip />} />
-                <Legend formatter={(value) => <span style={{ color: '#cbd5e1', fontSize: '0.85rem' }}>{value}</span>} />
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
+          {expenseCuts.length === 0 ? (
+            <div className="glass-card" style={{ textAlign: 'center', padding: '3rem', color: '#94a3b8' }}>
+              No expenses recorded in active profile.
+            </div>
+          ) : (
+            <div style={{ width: '100%', height: 280 }}>
+              <ResponsiveContainer>
+                <PieChart>
+                  <Pie
+                    data={expenseCuts}
+                    innerRadius={65}
+                    outerRadius={95}
+                    paddingAngle={5}
+                    dataKey="value"
+                    nameKey="name"
+                  >
+                    {expenseCuts.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.color} />
+                    ))}
+                  </Pie>
+                  <Tooltip content={<CustomPieTooltip />} />
+                  <Legend formatter={(value) => <span style={{ color: '#cbd5e1', fontSize: '0.85rem' }}>{value}</span>} />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+          )}
         </div>
 
         {/* Bar Chart: Monthly Income vs Expenses */}
         <div className="glass-panel" style={{ padding: '1.5rem' }}>
           <h3 style={{ fontSize: '1.1rem', color: 'white', marginBottom: '1rem' }}>Monthly Cash Flow (Income vs Expenses)</h3>
-          <div style={{ width: '100%', height: 280 }}>
-            <ResponsiveContainer>
-              <BarChart data={monthlyCashFlow}>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
-                <XAxis dataKey="month" stroke="#94a3b8" />
-                <YAxis stroke="#94a3b8" />
-                <Tooltip contentStyle={{ background: '#1e293b', borderColor: 'rgba(255,255,255,0.1)', borderRadius: '8px' }} />
-                <Bar dataKey="Income" fill="#10b981" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="Expense" fill="#f43f5e" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-      </div>
-
-      {/* Upload Cadence & Reminders Matrix */}
-      <div className="glass-panel" style={{ padding: '1.5rem' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <AlertTriangle size={20} color="#f59e0b" />
-            <h3 style={{ fontSize: '1.1rem', color: 'white' }}>Upload Cadence & Statement Reminders</h3>
-          </div>
-          <span style={{ fontSize: '0.8rem', color: '#94a3b8' }}>Automated Telegram Alerts Active</span>
-        </div>
-
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '0.75rem' }}>
-          {uploadStatus.map((item, idx) => (
-            <div key={idx} className="glass-card" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div>
-                <span style={{ fontSize: '0.9rem', fontWeight: 600, color: 'white', display: 'block' }}>{item.name}</span>
-                <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>{item.lastUpload}</span>
-              </div>
-              <span className={
-                item.status === 'ok' ? 'badge badge-emerald' :
-                item.status === 'warning' ? 'badge badge-amber' : 'badge badge-rose'
-              }>
-                {item.status === 'ok' ? 'Up to date' : item.status === 'warning' ? 'Review Due' : 'Missing'}
-              </span>
+          {monthlyCashFlow.length === 0 ? (
+            <div className="glass-card" style={{ textAlign: 'center', padding: '3rem', color: '#94a3b8' }}>
+              No monthly cash flow logged in active profile.
             </div>
-          ))}
+          ) : (
+            <div style={{ width: '100%', height: 280 }}>
+              <ResponsiveContainer>
+                <BarChart data={monthlyCashFlow}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+                  <XAxis dataKey="month" stroke="#94a3b8" />
+                  <YAxis stroke="#94a3b8" />
+                  <Tooltip contentStyle={{ background: '#1e293b', borderColor: 'rgba(255,255,255,0.1)', borderRadius: '8px' }} />
+                  <Bar dataKey="Income" fill="#10b981" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="Expense" fill="#f43f5e" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          )}
         </div>
       </div>
     </div>
