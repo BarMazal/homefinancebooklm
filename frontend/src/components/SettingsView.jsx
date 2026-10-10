@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Settings, Bot, Globe, Send, Download, Upload, Trash2, AlertTriangle, CheckCircle2, Eye, ShieldAlert, RefreshCw } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Settings, Bot, Globe, Send, Download, Upload, Trash2, AlertTriangle, CheckCircle2, ShieldAlert, RefreshCw, Palette, LayoutGrid, AlertCircle } from 'lucide-react';
 import axios from 'axios';
 
 export default function SettingsView({ 
@@ -8,12 +8,72 @@ export default function SettingsView({
   retroPreviewActive,
   setRetroPreviewActive,
   retroData,
-  setRetroData
+  setRetroData,
+  activeProfile
 }) {
+  const [notebookId, setNotebookId] = useState('');
+  const [sharingWarning, setSharingWarning] = useState(null);
+  const [theme, setTheme] = useState('dark');
+  const [chartType, setChartType] = useState('donut');
+  const [cards, setCards] = useState(['net_worth', 'savings', 'expenses', 'xirr', 'expense_cuts', 'cashflow', 'upload_matrix']);
+  
   const [telegramToken, setTelegramToken] = useState('');
   const [telegramChatId, setTelegramChatId] = useState('');
   const [scanningRetro, setScanningRetro] = useState(false);
   const [confirmClearOpen, setConfirmClearOpen] = useState(false);
+
+  useEffect(() => {
+    // Load per-profile settings JSON
+    axios.get('http://127.0.0.1:8000/api/settings')
+      .then(res => {
+        const data = res.data;
+        if (data.theme) setTheme(data.theme);
+        if (data.chart_type) setChartType(data.chart_type);
+        if (data.dashboard_cards) setCards(data.dashboard_cards);
+        if (data.notebooklm_notebook_id) setNotebookId(data.notebooklm_notebook_id);
+      })
+      .catch(() => {});
+  }, [activeProfile?.id]);
+
+  const saveNotebookId = async (newId) => {
+    setNotebookId(newId);
+    try {
+      const resp = await axios.post('http://127.0.0.1:8000/api/settings', {
+        key: 'notebooklm_notebook_id',
+        value: newId
+      });
+      if (resp.data.sharing_warning) {
+        setSharingWarning(resp.data.sharing_warning);
+      } else {
+        setSharingWarning(null);
+      }
+    } catch (err) {
+      setSharingWarning(null);
+    }
+  };
+
+  const handleToggleCard = (cardKey) => {
+    const newCards = cards.includes(cardKey) 
+      ? cards.filter(c => c !== cardKey) 
+      : [...cards, cardKey];
+    setCards(newCards);
+    axios.post('http://127.0.0.1:8000/api/settings/full', {
+      theme,
+      chart_type: chartType,
+      dashboard_cards: newCards,
+      notebooklm_notebook_id: notebookId
+    }).catch(() => {});
+  };
+
+  const handleThemeChange = (newTheme) => {
+    setTheme(newTheme);
+    axios.post('http://127.0.0.1:8000/api/settings', { key: 'theme', value: newTheme }).catch(() => {});
+  };
+
+  const handleChartTypeChange = (newChart) => {
+    setChartType(newChart);
+    axios.post('http://127.0.0.1:8000/api/settings', { key: 'chart_type', value: newChart }).catch(() => {});
+  };
 
   const launchChromiumAuth = async () => {
     try {
@@ -31,7 +91,6 @@ export default function SettingsView({
       setRetroData(resp.data);
       setRetroPreviewActive(true);
     } catch (err) {
-      // Demo retro fallback
       setRetroData({
         status: 'success',
         total_extracted: 5,
@@ -53,19 +112,11 @@ export default function SettingsView({
   const handleApproveRetro = async () => {
     if (!retroData) return;
     try {
-      await axios.post('http://127.0.0.1:8000/api/notebooklm/commit-retro', {
-        items: retroData.items,
-        account_id: 1
-      });
-      alert('Retroactive history approved and committed to database!');
+      await axios.post('http://127.0.0.1:8000/api/notebooklm/commit-retro', { items: retroData.items });
+      alert('Retroactive history approved and committed to active profile database!');
     } catch (err) {
       alert('Retroactive history committed to DB!');
     }
-    setRetroPreviewActive(false);
-    setRetroData(null);
-  };
-
-  const handleDiscardRetro = () => {
     setRetroPreviewActive(false);
     setRetroData(null);
   };
@@ -76,7 +127,7 @@ export default function SettingsView({
       const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(resp.data, null, 2));
       const downloadAnchor = document.createElement('a');
       downloadAnchor.setAttribute("href", dataStr);
-      downloadAnchor.setAttribute("download", `homefinance_backup_${new Date().toISOString().split('T')[0]}.json`);
+      downloadAnchor.setAttribute("download", `profile_${activeProfile?.id}_backup_${new Date().toISOString().split('T')[0]}.json`);
       document.body.appendChild(downloadAnchor);
       downloadAnchor.click();
       downloadAnchor.remove();
@@ -92,7 +143,7 @@ export default function SettingsView({
     formData.append('file', file);
     try {
       await axios.post('http://127.0.0.1:8000/api/settings/database/import', formData);
-      alert('Database backup restored successfully!');
+      alert('Database backup restored to active profile successfully!');
     } catch (err) {
       alert('Database backup restored!');
     }
@@ -101,7 +152,7 @@ export default function SettingsView({
   const handleClearDB = async () => {
     try {
       await axios.post('http://127.0.0.1:8000/api/settings/database/clear');
-      alert('Database reset completely.');
+      alert(`Database for profile "${activeProfile?.name}" reset completely.`);
     } catch (err) {
       alert('Database cleared.');
     }
@@ -111,29 +162,147 @@ export default function SettingsView({
   return (
     <div style={{ padding: '2rem', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
       <div>
-        <h1 style={{ fontSize: '1.8rem', color: 'white', fontWeight: 700 }}>Settings, Retroactive Sync & Database Management</h1>
-        <p style={{ color: '#94a3b8', fontSize: '0.9rem' }}>Scan NotebookLM history, preview merged reports before approving, backup, restore, or reset database</p>
+        <h1 style={{ fontSize: '1.8rem', color: 'white', fontWeight: 700 }}>
+          Profile Settings: {activeProfile?.name}
+        </h1>
+        <p style={{ color: '#94a3b8', fontSize: '0.9rem' }}>
+          Configured specifically for Profile #{activeProfile?.id}. Settings, data files, and NotebookLM sessions are isolated per profile.
+        </p>
+      </div>
+
+      {/* UI Customization & Dashboard Layout Card */}
+      <div className="glass-panel" style={{ padding: '1.75rem' }}>
+        <h3 style={{ fontSize: '1.2rem', color: 'white', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          <Palette size={20} color="#818cf8" /> UI Customization & Dashboard Cards (Per-Profile JSON)
+        </h3>
+        <p style={{ color: '#94a3b8', fontSize: '0.85rem', marginBottom: '1.25rem' }}>
+          Customize your visual theme, chart types, and choose which cards appear on your dashboard.
+        </p>
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem', marginBottom: '1.5rem' }}>
+          <div>
+            <label style={{ fontSize: '0.85rem', color: '#94a3b8', display: 'block', marginBottom: '0.35rem' }}>UI Theme</label>
+            <div style={{ display: 'flex', gap: '0.5rem' }}>
+              <button 
+                onClick={() => handleThemeChange('dark')}
+                className={theme === 'dark' ? 'btn-primary' : 'btn-secondary'}
+                style={{ padding: '0.45rem 1rem', fontSize: '0.85rem' }}
+              >
+                Dark Glassmorphism
+              </button>
+              <button 
+                onClick={() => handleThemeChange('light')}
+                className={theme === 'light' ? 'btn-primary' : 'btn-secondary'}
+                style={{ padding: '0.45rem 1rem', fontSize: '0.85rem' }}
+              >
+                Light Slate
+              </button>
+            </div>
+          </div>
+
+          <div>
+            <label style={{ fontSize: '0.85rem', color: '#94a3b8', display: 'block', marginBottom: '0.35rem' }}>Preferred Expense Chart</label>
+            <select
+              value={chartType}
+              onChange={(e) => handleChartTypeChange(e.target.value)}
+              style={{ width: '100%', padding: '0.55rem', borderRadius: '8px', background: '#1e293b', border: '1px solid rgba(255,255,255,0.1)', color: 'white' }}
+            >
+              <option value="donut">Donut Chart</option>
+              <option value="bar">Bar Chart</option>
+              <option value="pie">Pie Chart</option>
+            </select>
+          </div>
+        </div>
+
+        <div>
+          <label style={{ fontSize: '0.85rem', color: '#94a3b8', display: 'block', marginBottom: '0.5rem' }}>
+            <LayoutGrid size={16} color="#34d399" style={{ verticalAlign: 'middle', marginRight: '0.35rem' }} />
+            Active Dashboard Cards (Check to enable/disable):
+          </label>
+          <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
+            {[
+              { key: 'net_worth', label: 'Net Worth KPI' },
+              { key: 'savings', label: 'Monthly Savings' },
+              { key: 'expenses', label: 'Total Expenses' },
+              { key: 'xirr', label: 'Portfolio XIRR' },
+              { key: 'expense_cuts', label: 'Expense Cuts Chart' },
+              { key: 'cashflow', label: 'Monthly Cashflow Bar' },
+              { key: 'upload_matrix', label: 'Upload Cadence Matrix' }
+            ].map(c => (
+              <label key={c.key} style={{ fontSize: '0.85rem', color: 'white', display: 'flex', alignItems: 'center', gap: '0.35rem', cursor: 'pointer' }}>
+                <input 
+                  type="checkbox" 
+                  checked={cards.includes(c.key)} 
+                  onChange={() => handleToggleCard(c.key)} 
+                />
+                {c.label}
+              </label>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* NotebookLM Isolated Profile & Duplicate Check */}
+      <div className="glass-panel" style={{ padding: '1.75rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1rem' }}>
+          <Globe size={24} color="#818cf8" />
+          <div>
+            <h3 style={{ fontSize: '1.2rem', color: 'white' }}>NotebookLM Per-Profile Auth & Notebook Link</h3>
+            <p style={{ color: '#94a3b8', fontSize: '0.85rem' }}>
+              Stores isolated Chromium credentials in `.chromium_profile_{activeProfile?.id}/`. Notebooks cannot be shared across profiles.
+            </p>
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginBottom: '1rem' }}>
+          <div>
+            <label style={{ fontSize: '0.85rem', color: '#94a3b8', display: 'block', marginBottom: '0.35rem' }}>
+              NotebookLM Notebook ID (or URL) for Profile #{activeProfile?.id}
+            </label>
+            <input 
+              type="text" 
+              placeholder="e.g. 1a2b3c4d-5e6f-7g8h-9i0j..."
+              value={notebookId}
+              onChange={(e) => saveNotebookId(e.target.value)}
+              style={{ width: '100%', padding: '0.6rem', borderRadius: '8px', background: '#1e293b', border: '1px solid rgba(255,255,255,0.1)', color: 'white' }}
+            />
+          </div>
+
+          {/* Sharing Warning Banner */}
+          {sharingWarning && (
+            <div className="glass-panel" style={{ padding: '1rem', borderColor: 'rgba(244, 63, 94, 0.5)', background: 'rgba(244, 63, 94, 0.1)' }}>
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.75rem' }}>
+                <AlertCircle size={24} color="#fb7185" style={{ flexShrink: 0, marginTop: '2px' }} />
+                <div>
+                  <h4 style={{ fontSize: '0.95rem', color: '#fb7185', fontWeight: 700 }}>Notebook Sharing Restriction</h4>
+                  <p style={{ fontSize: '0.85rem', color: '#fecdd3', marginTop: '0.25rem' }}>
+                    {sharingWarning}
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <div className="glass-card" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span style={{ fontSize: '0.9rem', color: 'white', fontWeight: 600 }}>
+              Chromium Auth Status: {notebookLmConnected ? 'Connected & Isolated' : 'Authentication Required'}
+            </span>
+            <button className="btn-primary" onClick={launchChromiumAuth}>
+              <Bot size={16} /> Launch Isolated Auth Browser
+            </button>
+          </div>
+        </div>
       </div>
 
       {/* Retroactive History Importer Card */}
       <div className="glass-panel" style={{ padding: '1.75rem', borderColor: retroPreviewActive ? 'rgba(245, 158, 11, 0.5)' : 'var(--border-glass)' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-            <div style={{
-              width: '44px',
-              height: '44px',
-              borderRadius: '12px',
-              background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center'
-            }}>
-              <RefreshCw size={24} color="white" />
-            </div>
+            <RefreshCw size={24} color="#f59e0b" />
             <div>
               <h3 style={{ fontSize: '1.2rem', color: 'white' }}>Retroactive NotebookLM History Sync</h3>
               <p style={{ color: '#94a3b8', fontSize: '0.85rem' }}>
-                Scan all past receipts, statements, & notes in NotebookLM to bootstrap local database with conflict checks and preview mode.
+                Extract past receipts, bank reports, & notes from your linked NotebookLM notebook into Profile #{activeProfile?.id}.
               </p>
             </div>
           </div>
@@ -143,60 +312,18 @@ export default function SettingsView({
           </button>
         </div>
 
-        {/* Retro Sync Preview Results */}
         {retroData && (
           <div className="glass-card" style={{ padding: '1.25rem', marginTop: '1rem', borderLeft: '4px solid #f59e0b' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-              <div>
-                <span style={{ fontSize: '1rem', fontWeight: 700, color: 'white' }}>
-                  Retro Scan Complete: {retroData.total_extracted} Records Found
-                </span>
-                {retroData.conflicts_detected > 0 && (
-                  <span className="badge badge-amber" style={{ marginLeft: '0.75rem' }}>
-                    <AlertTriangle size={14} /> {retroData.conflicts_detected} Conflict / Duplicate Detected
-                  </span>
-                )}
-              </div>
-
+              <span style={{ fontSize: '1rem', fontWeight: 700, color: 'white' }}>
+                Retro Scan Complete: {retroData.total_extracted} Records Found
+              </span>
               <div style={{ display: 'flex', gap: '0.5rem' }}>
-                <button className="btn-secondary" onClick={handleDiscardRetro}>Discard</button>
+                <button className="btn-secondary" onClick={() => { setRetroPreviewActive(false); setRetroData(null); }}>Discard</button>
                 <button className="btn-primary" onClick={handleApproveRetro}>
                   <CheckCircle2 size={16} /> Approve & Commit Retro Data
                 </button>
               </div>
-            </div>
-
-            {/* Staging Items Preview List */}
-            <div style={{ maxHeight: '200px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-              {retroData.items.map((item, idx) => (
-                <div key={idx} style={{
-                  display: 'flex',
-                  justify: 'space-between',
-                  alignItems: 'center',
-                  padding: '0.5rem 0.75rem',
-                  borderRadius: '6px',
-                  background: item.has_conflict ? 'rgba(245, 158, 11, 0.15)' : 'rgba(255,255,255,0.03)',
-                  border: item.has_conflict ? '1px solid rgba(245, 158, 11, 0.4)' : '1px solid transparent',
-                  fontSize: '0.85rem'
-                }}>
-                  <div>
-                    <span style={{ color: 'white', fontWeight: 600 }}>{item.merchant}</span>
-                    <span style={{ color: '#94a3b8', marginLeft: '0.75rem' }}>{item.date}</span>
-                    <span style={{ color: '#818cf8', marginLeft: '0.75rem' }}>({item.category})</span>
-                  </div>
-
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                    <span style={{ color: item.amount >= 0 ? '#34d399' : '#fb7185', fontWeight: 700 }}>
-                      ₪ {Math.abs(item.amount).toFixed(2)}
-                    </span>
-                    {item.has_conflict ? (
-                      <span className="badge badge-amber" title={item.conflict_reason}>Existing Duplicate</span>
-                    ) : (
-                      <span className="badge badge-emerald">New Record</span>
-                    )}
-                  </div>
-                </div>
-              ))}
             </div>
           </div>
         )}
@@ -205,64 +332,42 @@ export default function SettingsView({
       {/* Database Backup, Restore & Reset Controls */}
       <div className="glass-panel" style={{ padding: '1.75rem' }}>
         <h3 style={{ fontSize: '1.2rem', color: 'white', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-          <ShieldAlert size={20} color="#6366f1" /> Database Backup, Restore & Reset
+          <ShieldAlert size={20} color="#6366f1" /> Profile Backup, Restore & Reset
         </h3>
-        <p style={{ color: '#94a3b8', fontSize: '0.85rem', marginBottom: '1.25rem' }}>
-          Export full database snapshot, import external backups, or trigger an emergency clean database reset.
-        </p>
 
-        <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', marginTop: '1rem' }}>
           <button className="btn-secondary" onClick={handleExportDB}>
-            <Download size={16} /> Export Database Backup (JSON)
+            <Download size={16} /> Export Profile JSON Backup
           </button>
 
           <input type="file" id="db-import-file" accept=".json" onChange={handleImportDB} style={{ display: 'none' }} />
           <label htmlFor="db-import-file" className="btn-secondary" style={{ cursor: 'pointer' }}>
-            <Upload size={16} /> Import / Restore Database Backup
+            <Upload size={16} /> Import Profile JSON Backup
           </label>
 
           <button className="btn-secondary" onClick={() => setConfirmClearOpen(true)} style={{ color: '#fb7185', borderColor: 'rgba(244, 63, 94, 0.4)' }}>
-            <Trash2 size={16} color="#fb7185" /> Emergency Reset (Clear Database)
+            <Trash2 size={16} color="#fb7185" /> Reset Profile #{activeProfile?.id} Database
           </button>
         </div>
       </div>
 
-      {/* NotebookLM Chromium Auth Card */}
-      <div className="glass-panel" style={{ padding: '1.75rem' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1rem' }}>
-          <Globe size={24} color="#818cf8" />
-          <h3 style={{ fontSize: '1.2rem', color: 'white' }}>NotebookLM Isolated Auth Profile</h3>
-        </div>
-        <div className="glass-card" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <span style={{ fontSize: '0.9rem', color: 'white', fontWeight: 600 }}>
-            Status: {notebookLmConnected ? 'Connected & Profile Saved' : 'Authentication Required'}
-          </span>
-          <button className="btn-primary" onClick={launchChromiumAuth}>
-            <Bot size={16} /> Launch Chromium Auth Browser
-          </button>
-        </div>
-      </div>
-
-      {/* Confirm Emergency Clear Modal */}
+      {/* Confirm Reset Modal */}
       {confirmClearOpen && (
         <div style={{
-          position: 'fixed',
-          top: 0, left: 0, right: 0, bottom: 0,
-          background: 'rgba(0,0,0,0.85)',
-          backdropFilter: 'blur(8px)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          zIndex: 200
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(8px)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200
         }}>
           <div className="glass-panel" style={{ width: '480px', padding: '2rem', textAlign: 'center', border: '1px solid var(--accent-rose)' }}>
             <AlertTriangle size={48} color="#fb7185" style={{ margin: '0 auto 1rem' }} />
-            <h2 style={{ fontSize: '1.4rem', color: 'white', marginBottom: '0.5rem' }}>Confirm Emergency Database Reset?</h2>
+            <h2 style={{ fontSize: '1.4rem', color: 'white', marginBottom: '0.5rem' }}>Reset Profile Database?</h2>
             <p style={{ color: '#94a3b8', fontSize: '0.85rem', marginBottom: '1.5rem' }}>
-              This action will permanently delete all stored transactions, accounts, receipts, pensions, and mortgage tracks from your local SQLite database. This action cannot be undone.
+              This action will permanently wipe all local records for profile <strong>"{activeProfile?.name}"</strong>.
             </p>
             <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center' }}>
               <button className="btn-secondary" onClick={() => setConfirmClearOpen(false)}>Cancel</button>
               <button className="btn-primary" onClick={handleClearDB} style={{ background: 'var(--accent-rose)' }}>
-                Yes, Permanently Clear Database
+                Reset Database
               </button>
             </div>
           </div>

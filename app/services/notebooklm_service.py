@@ -1,44 +1,46 @@
 import os
-import subprocess
 import asyncio
 from playwright.async_api import async_playwright
-
-CHROMIUM_PROFILE_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), ".chromium_profile")
+from app.services.profile_manager import profile_manager
 
 class NotebookLMService:
-    def __init__(self):
-        self.profile_dir = CHROMIUM_PROFILE_DIR
-        os.makedirs(self.profile_dir, exist_ok=True)
-
-    async def launch_auth_browser(self):
+    async def launch_auth_browser(self, profile_id: int = None):
         """
         Launches an isolated Chromium browser window using Playwright persistent context
-        pointing to https://notebooklm.google.com/
-        Allows the user to authenticate their preferred Google account separately from system Chrome.
+        targeting `.chromium_profile_<profile_id>/`
         """
-        print(f"[NotebookLM] Launching Chromium Auth Window in {self.profile_dir}...")
+        if profile_id is None:
+            profile_id = profile_manager.get_active_profile_id()
+
+        c_dir = profile_manager.get_profile_chromium_dir(profile_id)
+        print(f"[NotebookLM] Launching Chromium Auth Window for profile {profile_id} in {c_dir}...")
+        
         playwright = await async_playwright().start()
         browser_context = await playwright.chromium.launch_persistent_context(
-            user_data_dir=self.profile_dir,
+            user_data_dir=c_dir,
             headless=False, # Interactive mode so user can log in
             args=["--no-sandbox", "--disable-setuid-sandbox", "--window-size=1280,800"]
         )
         page = await browser_context.new_page()
         await page.goto("https://notebooklm.google.com/")
-        print("[NotebookLM] Browser window opened. Please complete authentication in the browser window.")
-        return {"status": "success", "message": "Chromium window launched. Log in and close when finished."}
+        print(f"[NotebookLM Profile {profile_id}] Browser window opened. Complete authentication in browser.")
+        return {"status": "success", "message": f"Chromium auth window launched for Profile {profile_id}."}
 
-    async def check_connection_status(self):
+    async def check_connection_status(self, profile_id: int = None):
         """
-        Checks if the saved chromium profile has active cookies/authentication for NotebookLM.
+        Checks if the saved chromium profile for the current app profile has active cookies/authentication.
         """
-        if not os.path.exists(self.profile_dir):
-            return {"authenticated": False, "notebooks_count": 0, "message": "No chromium profile found."}
+        if profile_id is None:
+            profile_id = profile_manager.get_active_profile_id()
+
+        c_dir = profile_manager.get_profile_chromium_dir(profile_id)
+        if not os.path.exists(c_dir):
+            return {"authenticated": False, "notebooks_count": 0, "message": "No chromium auth profile found."}
 
         try:
             playwright = await async_playwright().start()
             browser_context = await playwright.chromium.launch_persistent_context(
-                user_data_dir=self.profile_dir,
+                user_data_dir=c_dir,
                 headless=True
             )
             page = await browser_context.new_page()
@@ -47,7 +49,6 @@ class NotebookLMService:
             await browser_context.close()
             await playwright.stop()
 
-            # Check if redirected to login page or signed in
             if "accounts.google.com" in page.url or "Sign in" in content:
                 return {"authenticated": False, "notebooks_count": 0, "message": "User not logged in."}
 
