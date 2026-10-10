@@ -95,6 +95,16 @@ class MortgageTrack(Base):
     monthly_payment = Column(Float)
     end_date = Column(Date)
 
+class RealEstateProperty(Base):
+    __tablename__ = "real_estate_properties"
+
+    id = Column(Integer, primary_key=True, index=True)
+    profile_id = Column(Integer, ForeignKey("profiles.id"), default=1)
+    name = Column(String, index=True)
+    estimated_value = Column(Float, default=0.0)
+    monthly_rent = Column(Float, default=0.0)
+    annual_maintenance = Column(Float, default=0.0)
+
 class Setting(Base):
     __tablename__ = "settings"
 

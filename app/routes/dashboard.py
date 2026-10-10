@@ -5,7 +5,7 @@ from typing import List, Dict, Any
 from datetime import datetime, date
 
 from app.database import get_db
-from app.models import Account, Transaction, MortgageTrack, PensionPolicy, Receipt
+from app.models import Account, Transaction, MortgageTrack, PensionPolicy, Receipt, RealEstateProperty
 from app.services.xirr_service import fetch_usd_ils_rate
 
 router = APIRouter(prefix="/api/dashboard", tags=["Dashboard"])
@@ -95,13 +95,15 @@ async def get_dashboard_overview(db: AsyncSession = Depends(get_db)):
             "Expense": round(flow["Expense"], 2)
         })
 
-    # 3. Mortgage Equity
-    mort_res = await db.execute(select(MortgageTrack))
-    mortgages = mort_res.scalars().all()
-    if mortgages:
-        property_val = 3500000.0 + 1800000.0 # From demo real estate properties
+    # 3. Real Estate Equity from DB
+    re_res = await db.execute(select(RealEstateProperty))
+    properties = re_res.scalars().all()
+    if properties:
+        total_prop_val = sum(p.estimated_value for p in properties)
+        mort_res = await db.execute(select(MortgageTrack))
+        mortgages = mort_res.scalars().all()
         total_mortgage_debt = sum(m.remaining_balance for m in mortgages)
-        total_net_worth += (property_val - total_mortgage_debt)
+        total_net_worth += (total_prop_val - total_mortgage_debt)
 
     # 4. XIRR calculation
     portfolio_xirr = 8.65 if (accounts and len(transactions) > 0) else 0.0

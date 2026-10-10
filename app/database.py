@@ -38,7 +38,7 @@ async def init_db(profile_id: int = None):
 
     # Seed demo data ONLY for Profile 1 (Demo Profile) if empty
     if profile_id == 1:
-        from app.models import Account, Transaction, PensionPolicy, MortgageTrack, Receipt
+        from app.models import Account, Transaction, PensionPolicy, MortgageTrack, Receipt, RealEstateProperty
         async with sessionmaker() as session:
             acc_res = await session.execute(select(Account))
             if not acc_res.scalars().first():
@@ -62,9 +62,13 @@ async def init_db(profile_id: int = None):
                 p2 = PensionPolicy(policy_name="Executive Life Insurance", provider="Clal Insurance", type="Life Insurance", monthly_premium=240.0, covered_amount=1000000.0)
                 session.add_all([p1, p2])
 
-                # Add demo mortgages
-                m1 = MortgageTrack(property_name="Main Apartment", track_name="Prime (-0.6%)", original_amount=400000.0, remaining_balance=320000.0, interest_rate=5.4, monthly_payment=2450.0, end_date=date(2045, 1, 1))
-                m2 = MortgageTrack(property_name="Main Apartment", track_name="Fixed Non-Linked", original_amount=550000.0, remaining_balance=450000.0, interest_rate=4.2, monthly_payment=3120.0, end_date=date(2045, 1, 1))
+                # Add demo real estate properties & mortgages
+                re1 = RealEstateProperty(name="Main Family Apartment (Tel Aviv)", estimated_value=3500000.0, monthly_rent=0.0, annual_maintenance=12000.0)
+                re2 = RealEstateProperty(name="Rental Investment Apartment (Haifa)", estimated_value=1800000.0, monthly_rent=5200.0, annual_maintenance=8000.0)
+                session.add_all([re1, re2])
+
+                m1 = MortgageTrack(property_name="Main Family Apartment (Tel Aviv)", track_name="Prime (-0.6%)", original_amount=400000.0, remaining_balance=320000.0, interest_rate=5.4, monthly_payment=2450.0, end_date=date(2045, 1, 1))
+                m2 = MortgageTrack(property_name="Main Family Apartment (Tel Aviv)", track_name="Fixed Non-Linked", original_amount=550000.0, remaining_balance=450000.0, interest_rate=4.2, monthly_payment=3120.0, end_date=date(2045, 1, 1))
                 session.add_all([m1, m2])
 
                 await session.commit()

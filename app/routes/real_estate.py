@@ -6,7 +6,7 @@ from pydantic import BaseModel
 from datetime import date
 
 from app.database import get_db
-from app.models import MortgageTrack
+from app.models import MortgageTrack, RealEstateProperty
 
 router = APIRouter(prefix="/api/real-estate", tags=["Real Estate"])
 
@@ -30,44 +30,48 @@ async def list_properties_summary(db: AsyncSession = Depends(get_db)):
     """
     Returns multi-property real estate portfolio with per-property mortgage tracks from active profile DB.
     """
-    result = await db.execute(select(MortgageTrack))
-    tracks = result.scalars().all()
+    prop_res = await db.execute(select(RealEstateProperty))
+    db_properties = prop_res.scalars().all()
 
-    if not tracks:
+    if not db_properties:
         return []
 
-    properties_map = {
-        "Main Apartment": {
-            "id": 1,
-            "name": "Main Family Apartment (Tel Aviv)",
-            "estimated_value": 3500000.0,
-            "monthly_rent": 0.0, # Owner-occupied
-            "annual_maintenance": 12000.0,
-            "tracks": []
-        },
-        "Rental Apartment 1": {
-            "id": 2,
-            "name": "Rental Investment Apartment (Haifa)",
-            "estimated_value": 1800000.0,
-            "monthly_rent": 5200.0,
-            "annual_maintenance": 8000.0,
-            "tracks": []
-        }
-    }
+    track_res = await db.execute(select(MortgageTrack))
+    tracks = track_res.scalars().all()
 
-    for t in tracks:
-        p_key = t.property_name if t.property_name in properties_map else "Main Apartment"
-        properties_map[p_key]["tracks"].append({
-            "id": t.id,
-            "track_name": t.track_name,
-            "original_amount": t.original_amount,
-            "remaining_balance": t.remaining_balance,
-            "interest_rate": t.interest_rate,
-            "monthly_payment": t.monthly_payment,
-            "end_date": str(t.end_date)
+    properties_list = []
+    for p in db_properties:
+        p_tracks = [
+            {
+                "id": t.id,
+                "track_name": t.track_name,
+                "original_amount": t.original_amount,
+                "remaining_balance": t.remaining_balance,
+                "interest_rate": t.interest_rate,
+                "monthly_payment": t.monthly_payment,
+                "end_date": str(t.end_date)
+            }
+            for t in tracks if t.property_name == p.name or (p.id == 1 and t.property_name in ["Main Apartment", p.name])
+        ]
+
+        properties_list.append({
+            "id": p.id,
+            "name": p.name,
+            "estimated_value": p.estimated_value,
+            "monthly_rent": p.monthly_rent,
+            "annual_maintenance": p.annual_maintenance,
+            "tracks": p_tracks
         })
 
-    return [p for p in properties_map.values() if len(p["tracks"]) > 0]
+    return properties_list
+
+@router.post("/properties")
+async def create_property(prop: PropertyBase, db: AsyncSession = Depends(get_db)):
+    db_prop = RealEstateProperty(**prop.model_dump())
+    db.add(db_prop)
+    await db.commit()
+    await db.refresh(db_prop)
+    return db_prop
 
 @router.post("/mortgages")
 async def create_mortgage_track(track: TrackBase, db: AsyncSession = Depends(get_db)):
@@ -95,7 +99,7 @@ async def compare_rental_vs_stock(
 ):
     gross_annual_rent = monthly_rent * 12.0
     net_annual_rent = gross_annual_rent - annual_maintenance
-    net_rental_yield_pct = (net_annual_rent / property_value) * 100.0
+    net_rental_yield_pct = (net_annual_rent / property_value) * 100.0 if property_value else 0.0
     stock_net_yield_pct = stock_annual_return * (1.0 - (stock_capital_gains_tax / 100.0))
 
     return {
