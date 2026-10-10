@@ -91,19 +91,8 @@ export default function SettingsView({
       setRetroData(resp.data);
       setRetroPreviewActive(true);
     } catch (err) {
-      setRetroData({
-        status: 'success',
-        total_extracted: 5,
-        conflicts_detected: 1,
-        items: [
-          { date: '2026-01-15', merchant: 'Shufersal Supermarket', amount: -450.0, category: 'Groceries', has_conflict: false },
-          { date: '2026-02-10', merchant: 'Electric Corp (Chavrat Chashmal)', amount: -620.0, category: 'Housing & Utilities', has_conflict: true, conflict_reason: 'Matching transaction already exists' },
-          { date: '2026-03-05', merchant: 'Super-Pharm Tel Aviv', amount: -185.5, category: 'Groceries', has_conflict: false },
-          { date: '2026-04-12', merchant: 'Paz Gas Station', amount: -310.0, category: 'Car & Transport', has_conflict: false },
-          { date: '2026-05-20', merchant: 'Altshuler Pension Deposit', amount: 1850.0, category: 'Salary / Pension', has_conflict: false }
-        ]
-      });
-      setRetroPreviewActive(true);
+      alert('NotebookLM scan encountered an error or no linked notebook found for active profile.');
+      setRetroData(null);
     } finally {
       setScanningRetro(false);
     }

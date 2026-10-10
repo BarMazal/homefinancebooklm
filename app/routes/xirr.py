@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-from typing import List
+from typing import List, Dict, Any
 from datetime import date, timedelta
 
 from app.database import get_db
@@ -36,25 +36,49 @@ async def get_portfolio_summary(db: AsyncSession = Depends(get_db)):
         }
 
     total_val = 0.0
+    account_ids = [a.id for a in accounts]
     for acc in accounts:
         rate = fx_rate if acc.currency == "USD" else 1.0
         total_val += acc.current_balance * rate
 
-    # If Profile 1 demo savings account is present:
-    demo_history = [
-        { "year": "2021", "Balance": 120000, "Deposited": 110000 },
-        { "year": "2022", "Balance": 185000, "Deposited": 160000 },
-        { "year": "2023", "Balance": 270000, "Deposited": 220000 },
-        { "year": "2024", "Balance": 390000, "Deposited": 300000 },
-        { "year": "2025", "Balance": 530000, "Deposited": 390000 },
-        { "year": "2026", "Balance": round(total_val, 2), "Deposited": 470000 }
-    ]
+    tx_res = await db.execute(select(Transaction).where(Transaction.account_id.in_(account_ids)).order_by(Transaction.date.asc()))
+    txs = tx_res.scalars().all()
+
+    dates = [t.date for t in txs]
+    amounts = [t.amount for t in txs]
+
+    if dates and len(dates) >= 2:
+        xirr_pct = calculate_portfolio_xirr(dates, amounts)
+    else:
+        xirr_pct = 0.0
+
+    # Build historical yearly points dynamically from DB transactions if present
+    yearly_map: Dict[str, Dict[str, float]] = {}
+    running_balance = 0.0
+    running_deposited = 0.0
+
+    for t in txs:
+        yr = str(t.date.year)
+        if yr not in yearly_map:
+            yearly_map[yr] = {"Balance": 0.0, "Deposited": 0.0}
+        
+        if t.amount > 0:
+            running_deposited += t.amount
+        running_balance += t.amount
+
+        yearly_map[yr]["Balance"] = round(running_balance, 2)
+        yearly_map[yr]["Deposited"] = round(running_deposited, 2)
+
+    history = [{"year": yr, "Balance": data["Balance"], "Deposited": data["Deposited"]} for yr, data in yearly_map.items()]
+
+    total_deposited = running_deposited
+    gains = total_val - total_deposited if total_val > total_deposited else 0.0
 
     return {
         "total_valuation": round(total_val, 2),
-        "cumulative_gains": round(total_val * 0.31, 2) if total_val > 0 else 0.0,
-        "xirr_annual_percentage": 8.65 if total_val > 0 else 0.0,
-        "history": demo_history if total_val > 0 else []
+        "cumulative_gains": round(gains, 2),
+        "xirr_annual_percentage": round(xirr_pct, 2),
+        "history": history
     }
 
 @router.get("/savings-projection")

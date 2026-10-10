@@ -11,14 +11,18 @@ from app.models import Receipt, Transaction, Account
 from app.schemas import ReceiptResponse, ReceiptConfirm
 from app.services.ocr_service import process_receipt_ocr
 
-router = APIRouter(prefix="/api/receipts", tags=["Receipts"])
+from app.services.profile_manager import profile_manager
 
-UPLOAD_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "data", "uploads")
-os.makedirs(UPLOAD_DIR, exist_ok=True)
+router = APIRouter(prefix="/api/receipts", tags=["Receipts"])
 
 @router.post("/upload", response_model=ReceiptResponse)
 async def upload_receipt(file: UploadFile = File(...), db: AsyncSession = Depends(get_db)):
-    file_path = os.path.join(UPLOAD_DIR, f"{datetime.now().timestamp()}_{file.filename}")
+    active_profile_id = profile_manager.get_active_profile_id()
+    profile_dir = profile_manager.get_profile_dir(active_profile_id)
+    upload_dir = os.path.join(profile_dir, "uploads")
+    os.makedirs(upload_dir, exist_ok=True)
+
+    file_path = os.path.join(upload_dir, f"{datetime.now().timestamp()}_{file.filename}")
     with open(file_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
 

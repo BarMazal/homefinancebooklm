@@ -6,7 +6,7 @@ from datetime import datetime, date
 
 from app.database import get_db
 from app.models import Account, Transaction, MortgageTrack, PensionPolicy, Receipt, RealEstateProperty
-from app.services.xirr_service import fetch_usd_ils_rate
+from app.services.xirr_service import fetch_usd_ils_rate, calculate_portfolio_xirr
 
 router = APIRouter(prefix="/api/dashboard", tags=["Dashboard"])
 
@@ -105,14 +105,19 @@ async def get_dashboard_overview(db: AsyncSession = Depends(get_db)):
         total_mortgage_debt = sum(m.remaining_balance for m in mortgages)
         total_net_worth += (total_prop_val - total_mortgage_debt)
 
-    # 4. XIRR calculation
-    portfolio_xirr = 8.65 if (accounts and len(transactions) > 0) else 0.0
+    # 4. Dynamic XIRR calculation from active DB transactions
+    inv_acc_ids = [a.id for a in accounts if a.type in ["savings", "investment", "brokerage"]]
+    inv_txs = [t for t in transactions if t.account_id in inv_acc_ids]
+    if len(inv_txs) >= 2:
+        portfolio_xirr = calculate_portfolio_xirr([t.date for t in inv_txs], [t.amount for t in inv_txs])
+    else:
+        portfolio_xirr = 0.0
 
     return {
         "total_net_worth": round(total_net_worth, 2),
         "monthly_net_savings": round(monthly_income - monthly_expenses, 2),
         "monthly_expenses": round(monthly_expenses, 2),
-        "portfolio_xirr": portfolio_xirr,
+        "portfolio_xirr": round(portfolio_xirr, 2),
         "expense_cuts": expense_cuts,
         "monthly_cashflow": cashflow_list,
         "upload_status": upload_status,
