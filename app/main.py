@@ -14,7 +14,8 @@ from app.routes import (
     simulator,
     settings,
     notebooklm,
-    profiles
+    profiles,
+    dashboard
 )
 
 @asynccontextmanager
@@ -44,6 +45,7 @@ app.add_middleware(
 
 # Include API routers
 app.include_router(profiles.router)
+app.include_router(dashboard.router)
 app.include_router(accounts.router)
 app.include_router(transactions.router)
 app.include_router(receipts.router)

@@ -7,7 +7,7 @@ import axios from 'axios';
 
 const API_BASE = 'http://127.0.0.1:8900';
 
-export default function ExpensesView({ isCleanProfile }) {
+export default function ExpensesView({ activeProfileId }) {
   const [breadcrumbs, setBreadcrumbs] = useState(['All']);
   const [timeScope, setTimeScope] = useState('month');
   const [pendingReceipts, setPendingReceipts] = useState([]);
@@ -46,7 +46,7 @@ export default function ExpensesView({ isCleanProfile }) {
       .then(res => setPendingReceipts(res.data || []))
       .catch(() => setPendingReceipts([]))
       .finally(() => setLoading(false));
-  }, [isCleanProfile]);
+  }, [activeProfileId]);
 
   const totalCategoryAmount = clusterData.reduce((acc, curr) => acc + curr.value, 0);
 

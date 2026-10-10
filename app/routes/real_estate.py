@@ -28,10 +28,13 @@ class TrackBase(BaseModel):
 @router.get("/properties")
 async def list_properties_summary(db: AsyncSession = Depends(get_db)):
     """
-    Returns multi-property real estate portfolio with per-property mortgage tracks.
+    Returns multi-property real estate portfolio with per-property mortgage tracks from active profile DB.
     """
     result = await db.execute(select(MortgageTrack))
     tracks = result.scalars().all()
+
+    if not tracks:
+        return []
 
     properties_map = {
         "Main Apartment": {
@@ -64,7 +67,7 @@ async def list_properties_summary(db: AsyncSession = Depends(get_db)):
             "end_date": str(t.end_date)
         })
 
-    return list(properties_map.values())
+    return [p for p in properties_map.values() if len(p["tracks"]) > 0]
 
 @router.post("/mortgages")
 async def create_mortgage_track(track: TrackBase, db: AsyncSession = Depends(get_db)):

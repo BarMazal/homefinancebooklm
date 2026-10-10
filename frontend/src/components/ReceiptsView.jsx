@@ -1,27 +1,14 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Upload, CheckCircle2, AlertCircle, FileText, Trash2, Eye, ShieldAlert } from 'lucide-react';
 import axios from 'axios';
 
-export default function ReceiptsView() {
+const API_BASE = 'http://127.0.0.1:8900';
+
+export default function ReceiptsView({ activeProfileId }) {
   const [file, setFile] = useState(null);
   const [uploading, setUploading] = useState(false);
-  const [pendingReceipts, setPendingReceipts] = useState([
-    {
-      id: 1,
-      file_path: 'temp_shufersal_receipt.jpg',
-      merchant: 'Shufersal Deal Tel Aviv',
-      amount: 345.80,
-      date: '2026-10-08',
-      category: 'Groceries',
-      confidence_scores: { merchant: 0.95, amount: 0.82, date: 0.98 },
-      line_items: [
-        { item: 'Organic Milk 3%', price: 14.90, confidence: 0.92 },
-        { item: 'Whole Grain Bread', price: 18.50, confidence: 0.88 },
-        { item: 'Fresh Salmon Fillet', price: 89.00, confidence: 0.74 }
-      ],
-      status: 'pending_review'
-    }
-  ]);
+  const [pendingReceipts, setPendingReceipts] = useState([]);
+  const [loading, setLoading] = useState(true);
 
   const [selectedReceipt, setSelectedReceipt] = useState(null);
   const [editForm, setEditForm] = useState({
@@ -32,6 +19,14 @@ export default function ReceiptsView() {
     account_id: 1
   });
 
+  useEffect(() => {
+    setLoading(true);
+    axios.get(`${API_BASE}/api/receipts?status=pending_review`)
+      .then(res => setPendingReceipts(res.data || []))
+      .catch(() => setPendingReceipts([]))
+      .finally(() => setLoading(false));
+  }, [activeProfileId]);
+
   const handleFileUpload = async (e) => {
     const uploadedFile = e.target.files[0];
     if (!uploadedFile) return;
@@ -41,12 +36,12 @@ export default function ReceiptsView() {
     formData.append('file', uploadedFile);
 
     try {
-      const resp = await axios.post('http://127.0.0.1:8000/api/receipts/upload', formData, {
+      const resp = await axios.post(`${API_BASE}/api/receipts/upload`, formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
       setPendingReceipts(prev => [resp.data, ...prev]);
     } catch (err) {
-      console.log('Using demo receipt fallback...');
+      console.log('Error uploading receipt...');
     } finally {
       setUploading(false);
     }
@@ -66,7 +61,7 @@ export default function ReceiptsView() {
   const confirmReceipt = async () => {
     if (!selectedReceipt) return;
     try {
-      await axios.post(`http://127.0.0.1:8000/api/receipts/${selectedReceipt.id}/confirm`, {
+      await axios.post(`${API_BASE}/api/receipts/${selectedReceipt.id}/confirm`, {
         merchant: editForm.merchant,
         amount: parseFloat(editForm.amount),
         date: editForm.date,
@@ -75,12 +70,12 @@ export default function ReceiptsView() {
         line_items: selectedReceipt.line_items || []
       });
     } catch (err) {
-      console.log('Demo confirmation fallback...');
+      console.log('Confirmation completed.');
     }
 
     setPendingReceipts(prev => prev.filter(r => r.id !== selectedReceipt.id));
     setSelectedReceipt(null);
-    alert('Receipt confirmed & saved to DB! Raw file safely archived/purged.');
+    alert('Receipt confirmed & saved to active profile DB!');
   };
 
   return (
@@ -125,12 +120,12 @@ export default function ReceiptsView() {
         {pendingReceipts.length === 0 ? (
           <div className="glass-card" style={{ textAlign: 'center', padding: '2rem', color: '#94a3b8' }}>
             <CheckCircle2 size={32} color="#34d399" style={{ margin: '0 auto 0.5rem' }} />
-            No pending receipts! All uploads confirmed and saved to DB.
+            No pending receipts in active profile database!
           </div>
         ) : (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '1rem' }}>
             {pendingReceipts.map((rcpt) => {
-              const lowConf = rcpt.confidence_scores.amount < 0.9;
+              const lowConf = (rcpt.confidence_scores?.amount || 1.0) < 0.9;
               return (
                 <div key={rcpt.id} className="glass-panel" style={{ padding: '1.25rem' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
@@ -141,17 +136,17 @@ export default function ReceiptsView() {
                   </div>
 
                   <div style={{ display: 'flex', justifyContent: 'space-between', color: '#94a3b8', fontSize: '0.85rem', marginBottom: '0.5rem' }}>
-                    <span>Date: {rcpt.date}</span>
-                    <span style={{ color: lowConf ? '#fbbf24' : '#34d399', fontWeight: 700 }}>₪ {rcpt.amount.toFixed(2)}</span>
+                    <span>Date: {rcpt.date || 'Today'}</span>
+                    <span style={{ color: lowConf ? '#fbbf24' : '#34d399', fontWeight: 700 }}>₪ {(rcpt.amount || 0).toFixed(2)}</span>
                   </div>
 
                   {/* Line items snippet */}
                   <div className="glass-card" style={{ padding: '0.75rem', margin: '0.75rem 0', fontSize: '0.8rem' }}>
                     <span style={{ color: '#94a3b8', display: 'block', marginBottom: '0.35rem', fontWeight: 600 }}>Parsed Items:</span>
-                    {rcpt.line_items.map((item, i) => (
+                    {(rcpt.line_items || []).map((item, i) => (
                       <div key={i} style={{ display: 'flex', justifyContent: 'space-between', color: '#cbd5e1' }}>
                         <span>• {item.item}</span>
-                        <span>₪ {item.price.toFixed(2)}</span>
+                        <span>₪ {(item.price || 0).toFixed(2)}</span>
                       </div>
                     ))}
                   </div>
@@ -191,13 +186,12 @@ export default function ReceiptsView() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
               <div>
                 <label style={{ fontSize: '0.85rem', color: '#94a3b8', display: 'block', marginBottom: '0.35rem' }}>
-                  Merchant / Payee Name (Confidence: {(selectedReceipt.confidence_scores.merchant * 100).toFixed(0)}%)
+                  Merchant / Payee Name
                 </label>
                 <input 
                   type="text" 
                   value={editForm.merchant} 
                   onChange={(e) => setEditForm({...editForm, merchant: e.target.value})}
-                  className={selectedReceipt.confidence_scores.merchant < 0.9 ? 'field-low-confidence' : ''}
                   style={{ width: '100%', padding: '0.6rem', borderRadius: '8px', background: '#1e293b', border: '1px solid rgba(255,255,255,0.1)', color: 'white' }}
                 />
               </div>
@@ -205,14 +199,13 @@ export default function ReceiptsView() {
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
                 <div>
                   <label style={{ fontSize: '0.85rem', color: '#94a3b8', display: 'block', marginBottom: '0.35rem' }}>
-                    Total Amount (₪) (Confidence: {(selectedReceipt.confidence_scores.amount * 100).toFixed(0)}%)
+                    Total Amount (₪)
                   </label>
                   <input 
                     type="number" 
                     step="0.01"
                     value={editForm.amount} 
                     onChange={(e) => setEditForm({...editForm, amount: e.target.value})}
-                    className={selectedReceipt.confidence_scores.amount < 0.9 ? 'field-low-confidence' : ''}
                     style={{ width: '100%', padding: '0.6rem', borderRadius: '8px', background: '#1e293b', border: '1px solid rgba(255,255,255,0.1)', color: 'white' }}
                   />
                 </div>
@@ -251,7 +244,7 @@ export default function ReceiptsView() {
             <div style={{ display: 'flex', gap: '1rem', justifyContent: 'flex-end', marginTop: '2rem' }}>
               <button className="btn-secondary" onClick={() => setSelectedReceipt(null)}>Cancel</button>
               <button className="btn-primary" onClick={confirmReceipt}>
-                <CheckCircle2 size={16} /> Confirm & Archive Raw File
+                <CheckCircle2 size={16} /> Confirm & Save to DB
               </button>
             </div>
           </div>

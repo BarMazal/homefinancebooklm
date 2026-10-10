@@ -4,7 +4,7 @@ import axios from 'axios';
 
 const API_BASE = 'http://127.0.0.1:8900';
 
-export default function RealEstateView({ isCleanProfile }) {
+export default function RealEstateView({ activeProfileId }) {
   const [properties, setProperties] = useState([]);
   const [selectedPropertyId, setSelectedPropertyId] = useState(1);
   const [loading, setLoading] = useState(true);
@@ -19,7 +19,7 @@ export default function RealEstateView({ isCleanProfile }) {
       })
       .catch(() => setProperties([]))
       .finally(() => setLoading(false));
-  }, [isCleanProfile]);
+  }, [activeProfileId]);
 
   const activeProperty = properties.find(p => p.id === selectedPropertyId) || properties[0];
 

@@ -49,14 +49,16 @@ export default function App() {
       .catch(() => {});
   }, []);
 
-  const handleSwitchProfile = (profileId) => {
+  const handleSwitchProfile = async (profileId) => {
     const target = profiles.find(p => p.id === profileId);
     if (!target) return;
-    setActiveProfile(target);
-
-    // Call API activate profile
-    axios.post(`${API_BASE}/api/profiles/${profileId}/activate`)
-      .catch(() => {});
+    try {
+      await axios.post(`${API_BASE}/api/profiles/${profileId}/activate`);
+      setActiveProfile(target);
+    } catch (err) {
+      console.error(err);
+      setActiveProfile(target);
+    }
   };
 
   const handleCreateProfile = (name) => {
@@ -68,22 +70,20 @@ export default function App() {
       .catch(() => {});
   };
 
-  const isCleanProfile = activeProfile?.id !== 1;
-
   const renderActiveView = () => {
     switch (activeTab) {
       case 'overview':
-        return <DashboardView fxRate={fxRate} retroPreviewActive={retroPreviewActive} retroData={retroData} isCleanProfile={isCleanProfile} />;
+        return <DashboardView fxRate={fxRate} activeProfileId={activeProfile?.id} activeProfileName={activeProfile?.name} />;
       case 'expenses':
-        return <ExpensesView isCleanProfile={isCleanProfile} />;
+        return <ExpensesView activeProfileId={activeProfile?.id} />;
       case 'receipts':
-        return <ReceiptsView isCleanProfile={isCleanProfile} />;
+        return <ReceiptsView activeProfileId={activeProfile?.id} />;
       case 'investments':
-        return <InvestmentsView fxRate={fxRate} isCleanProfile={isCleanProfile} />;
+        return <InvestmentsView fxRate={fxRate} activeProfileId={activeProfile?.id} />;
       case 'pensions':
-        return <PensionsInsuranceView isCleanProfile={isCleanProfile} />;
+        return <PensionsInsuranceView activeProfileId={activeProfile?.id} />;
       case 'realestate':
-        return <RealEstateView isCleanProfile={isCleanProfile} />;
+        return <RealEstateView activeProfileId={activeProfile?.id} />;
       case 'reminders':
         return <RemindersView />;
       case 'simulator':
@@ -102,7 +102,7 @@ export default function App() {
                  onCreateProfile={handleCreateProfile}
                />;
       default:
-        return <DashboardView fxRate={fxRate} retroPreviewActive={retroPreviewActive} retroData={retroData} isCleanProfile={isCleanProfile} />;
+        return <DashboardView fxRate={fxRate} activeProfileId={activeProfile?.id} activeProfileName={activeProfile?.name} />;
     }
   };
 

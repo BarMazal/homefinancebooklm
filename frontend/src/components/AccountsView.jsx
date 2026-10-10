@@ -4,7 +4,7 @@ import axios from 'axios';
 
 const API_BASE = 'http://127.0.0.1:8900';
 
-export default function AccountsView({ isCleanProfile }) {
+export default function AccountsView({ activeProfileId }) {
   const [accounts, setAccounts] = useState([]);
   const [selectedAccountId, setSelectedAccountId] = useState(1);
   const [loading, setLoading] = useState(true);
@@ -19,7 +19,7 @@ export default function AccountsView({ isCleanProfile }) {
       })
       .catch(() => setAccounts([]))
       .finally(() => setLoading(false));
-  }, [isCleanProfile]);
+  }, [activeProfileId]);
 
   const handleCsvImport = async (e) => {
     const file = e.target.files[0];

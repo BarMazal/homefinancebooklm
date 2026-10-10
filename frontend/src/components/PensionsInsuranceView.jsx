@@ -4,7 +4,7 @@ import axios from 'axios';
 
 const API_BASE = 'http://127.0.0.1:8900';
 
-export default function PensionsInsuranceView({ isCleanProfile }) {
+export default function PensionsInsuranceView({ activeProfileId }) {
   const [policies, setPolicies] = useState([]);
   const [duplicates, setDuplicates] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -18,7 +18,7 @@ export default function PensionsInsuranceView({ isCleanProfile }) {
     axios.get(`${API_BASE}/api/pensions/audit/duplicates`)
       .then(res => setDuplicates(res.data?.duplicates || []))
       .catch(() => setDuplicates([]));
-  }, [isCleanProfile]);
+  }, [activeProfileId]);
 
   return (
     <div style={{ padding: '2rem', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
