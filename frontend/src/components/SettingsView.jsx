@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Settings, Bot, Chrome, Send, Download, Upload, Trash2, AlertTriangle, CheckCircle2, Eye, ShieldAlert, RefreshCw } from 'lucide-react';
+import { Settings, Bot, Globe, Send, Download, Upload, Trash2, AlertTriangle, CheckCircle2, Eye, ShieldAlert, RefreshCw } from 'lucide-react';
 import axios from 'axios';
 
 export default function SettingsView({ 
@@ -230,7 +230,7 @@ export default function SettingsView({
       {/* NotebookLM Chromium Auth Card */}
       <div className="glass-panel" style={{ padding: '1.75rem' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1rem' }}>
-          <Chrome size={24} color="#818cf8" />
+          <Globe size={24} color="#818cf8" />
           <h3 style={{ fontSize: '1.2rem', color: 'white' }}>NotebookLM Isolated Auth Profile</h3>
         </div>
         <div className="glass-card" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
