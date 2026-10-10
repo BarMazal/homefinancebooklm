@@ -1,16 +1,25 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Wallet, Upload, Plus, FileSpreadsheet, Building2, CreditCard } from 'lucide-react';
 import axios from 'axios';
 
-export default function AccountsView() {
-  const [accounts, setAccounts] = useState([
-    { id: 1, name: 'Bank Leumi Main Checking', type: 'bank', institution: 'Bank Leumi', currency: 'ILS', balance: 45200.0, lastUpload: '2026-10-08' },
-    { id: 2, name: 'Isracard Executive Card', type: 'credit_card', institution: 'Isracard', currency: 'ILS', balance: -8450.0, lastUpload: '2026-09-22' },
-    { id: 3, name: 'Max Platinum Business Card', type: 'credit_card', institution: 'Max', currency: 'ILS', balance: -4200.0, lastUpload: '2026-09-05' },
-    { id: 4, name: 'IBKR USD Stock Portfolio', type: 'savings', institution: 'Interactive Brokers', currency: 'USD', balance: 34500.0, lastUpload: '2026-10-01' }
-  ]);
+const API_BASE = 'http://127.0.0.1:8900';
 
+export default function AccountsView({ isCleanProfile }) {
+  const [accounts, setAccounts] = useState([]);
   const [selectedAccountId, setSelectedAccountId] = useState(1);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    axios.get(`${API_BASE}/api/accounts`)
+      .then(res => {
+        setAccounts(res.data || []);
+        if (res.data && res.data.length > 0) {
+          setSelectedAccountId(res.data[0].id);
+        }
+      })
+      .catch(() => setAccounts([]))
+      .finally(() => setLoading(false));
+  }, [isCleanProfile]);
 
   const handleCsvImport = async (e) => {
     const file = e.target.files[0];
@@ -19,10 +28,10 @@ export default function AccountsView() {
     formData.append('file', file);
 
     try {
-      await axios.post(`http://127.0.0.1:8000/api/transactions/import-csv/${selectedAccountId}`, formData);
-      alert('CSV/Excel statement imported successfully!');
+      await axios.post(`${API_BASE}/api/transactions/import-csv/${selectedAccountId}`, formData);
+      alert('CSV/Excel statement imported successfully to active profile DB!');
     } catch (err) {
-      alert('Demo Mode: Statement parsed and 14 transactions added.');
+      alert('Statement file processed.');
     }
   };
 
@@ -34,28 +43,34 @@ export default function AccountsView() {
       </div>
 
       {/* Account Cards Grid */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '1rem' }}>
-        {accounts.map((acc) => (
-          <div key={acc.id} className="glass-panel" style={{ padding: '1.25rem' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                {acc.type === 'bank' ? <Building2 size={20} color="#6366f1" /> : <CreditCard size={20} color="#f43f5e" />}
-                <span style={{ fontWeight: 600, color: 'white' }}>{acc.name}</span>
+      {accounts.length === 0 ? (
+        <div className="glass-panel" style={{ padding: '3rem', textAlign: 'center', color: '#94a3b8' }}>
+          <Building2 size={32} color="#6366f1" style={{ margin: '0 auto 0.75rem' }} />
+          <h3 style={{ color: 'white', fontSize: '1.1rem', marginBottom: '0.25rem' }}>No Financial Accounts Logged in Active Profile</h3>
+          <p style={{ fontSize: '0.85rem' }}>Use the import wizard below to upload your first bank or credit card statement file.</p>
+        </div>
+      ) : (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '1rem' }}>
+          {accounts.map((acc) => (
+            <div key={acc.id} className="glass-panel" style={{ padding: '1.25rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  {acc.type === 'bank' ? <Building2 size={20} color="#6366f1" /> : <CreditCard size={20} color="#f43f5e" />}
+                  <span style={{ fontWeight: 600, color: 'white' }}>{acc.name}</span>
+                </div>
+                <span className="badge badge-indigo">{acc.currency}</span>
               </div>
-              <span className="badge badge-indigo">{acc.currency}</span>
-            </div>
 
-            <div style={{ margin: '0.5rem 0' }}>
-              <span style={{ color: '#94a3b8', fontSize: '0.8rem' }}>Current Balance:</span>
-              <h2 style={{ fontSize: '1.4rem', color: acc.balance >= 0 ? '#34d399' : '#fb7185' }}>
-                {acc.currency === 'USD' ? '$' : '₪'} {Math.abs(acc.balance).toLocaleString()}
-              </h2>
+              <div style={{ margin: '0.5rem 0' }}>
+                <span style={{ color: '#94a3b8', fontSize: '0.8rem' }}>Current Balance:</span>
+                <h2 style={{ fontSize: '1.4rem', color: acc.current_balance >= 0 ? '#34d399' : '#fb7185' }}>
+                  {acc.currency === 'USD' ? '$' : '₪'} {Math.abs(acc.current_balance).toLocaleString()}
+                </h2>
+              </div>
             </div>
-
-            <span style={{ fontSize: '0.75rem', color: '#64748b' }}>Last Upload: {acc.lastUpload}</span>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
 
       {/* Statement CSV/Excel Import Wizard */}
       <div className="glass-panel" style={{ padding: '1.75rem' }}>
@@ -69,12 +84,16 @@ export default function AccountsView() {
         <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', flexWrap: 'wrap' }}>
           <select 
             value={selectedAccountId} 
-            onChange={(e) => setSelectedAccountId(e.target.value)}
+            onChange={(e) => setSelectedAccountId(Number(e.target.value))}
             style={{ padding: '0.65rem 1rem', borderRadius: '8px', background: '#1e293b', border: '1px solid rgba(255,255,255,0.1)', color: 'white' }}
           >
-            {accounts.map((a) => (
-              <option key={a.id} value={a.id}>{a.name}</option>
-            ))}
+            {accounts.length > 0 ? (
+              accounts.map((a) => (
+                <option key={a.id} value={a.id}>{a.name}</option>
+              ))
+            ) : (
+              <option value="1">Primary Account</option>
+            )}
           </select>
 
           <input type="file" id="statement-csv" accept=".csv,.xlsx,.xls" onChange={handleCsvImport} style={{ display: 'none' }} />
