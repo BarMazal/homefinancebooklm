@@ -13,7 +13,8 @@ from app.routes import (
     real_estate,
     simulator,
     settings,
-    notebooklm
+    notebooklm,
+    profiles
 )
 
 @asynccontextmanager
@@ -42,6 +43,7 @@ app.add_middleware(
 )
 
 # Include API routers
+app.include_router(profiles.router)
 app.include_router(accounts.router)
 app.include_router(transactions.router)
 app.include_router(receipts.router)

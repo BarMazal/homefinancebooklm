@@ -17,6 +17,13 @@ export default function App() {
   const [retroPreviewActive, setRetroPreviewActive] = useState(false);
   const [retroData, setRetroData] = useState(null);
 
+  // Profiles State
+  const [profiles, setProfiles] = useState([
+    { id: 1, name: 'Demo Profile (Sample Data)', is_active: true },
+    { id: 2, name: 'Personal Household (Clean Slate)', is_active: false }
+  ]);
+  const [activeProfile, setActiveProfile] = useState({ id: 1, name: 'Demo Profile (Sample Data)' });
+
   useEffect(() => {
     // Fetch live USD/ILS rate from FastAPI backend
     axios.get('http://127.0.0.1:8000/api/xirr/fx-rate')
@@ -27,23 +34,53 @@ export default function App() {
     axios.get('http://127.0.0.1:8000/api/notebooklm/status')
       .then(res => setNotebookLmConnected(res.data.authenticated))
       .catch(() => setNotebookLmConnected(true));
+
+    // Fetch Profiles
+    axios.get('http://127.0.0.1:8000/api/profiles')
+      .then(res => {
+        setProfiles(res.data);
+        const active = res.data.find(p => p.is_active) || res.data[0];
+        setActiveProfile(active);
+      })
+      .catch(() => {});
   }, []);
+
+  const handleSwitchProfile = (profileId) => {
+    const target = profiles.find(p => p.id === profileId);
+    if (!target) return;
+    setActiveProfile(target);
+
+    // Call API activate profile
+    axios.post(`http://127.0.0.1:8000/api/profiles/${profileId}/activate`)
+      .catch(() => {});
+  };
+
+  const handleCreateProfile = (name) => {
+    axios.post('http://127.0.0.1:8000/api/profiles', { name })
+      .then(res => {
+        setProfiles(prev => [...prev, res.data]);
+        handleSwitchProfile(res.data.id);
+      })
+      .catch(() => {});
+  };
+
+  const isCleanProfile = activeProfile?.id === 2;
 
   const renderActiveView = () => {
     switch (activeTab) {
       case 'dashboard':
-        return <DashboardView fxRate={fxRate} retroPreviewActive={retroPreviewActive} retroData={retroData} />;
+        return <DashboardView fxRate={fxRate} retroPreviewActive={retroPreviewActive} retroData={retroData} isCleanProfile={isCleanProfile} />;
       case 'receipts':
-        return <ReceiptsView />;
+        return <ReceiptsView isCleanProfile={isCleanProfile} />;
       case 'accounts':
-        return <AccountsView />;
+        return <AccountsView isCleanProfile={isCleanProfile} />;
       case 'savings':
-        return <SavingsXirrView fxRate={fxRate} />;
+        return <SavingsXirrView fxRate={fxRate} isCleanProfile={isCleanProfile} />;
       case 'pensions':
-        return <PensionsInsuranceView />;
+        return <PensionsInsuranceView isCleanProfile={isCleanProfile} />;
       case 'realestate':
       case 'simulator':
-        return <RealEstateSimulatorView />;
+        return <RealEstateSimulatorView isCleanProfile={isCleanProfile} />;
       case 'settings':
         return <SettingsView 
                  notebookLmConnected={notebookLmConnected} 
@@ -52,9 +89,13 @@ export default function App() {
                  setRetroPreviewActive={setRetroPreviewActive}
                  retroData={retroData}
                  setRetroData={setRetroData}
+                 profiles={profiles}
+                 activeProfile={activeProfile}
+                 onSwitchProfile={handleSwitchProfile}
+                 onCreateProfile={handleCreateProfile}
                />;
       default:
-        return <DashboardView fxRate={fxRate} retroPreviewActive={retroPreviewActive} retroData={retroData} />;
+        return <DashboardView fxRate={fxRate} retroPreviewActive={retroPreviewActive} retroData={retroData} isCleanProfile={isCleanProfile} />;
     }
   };
 
@@ -63,7 +104,11 @@ export default function App() {
       <Navigation 
         activeTab={activeTab} 
         setActiveTab={setActiveTab} 
-        notebookLmConnected={notebookLmConnected} 
+        notebookLmConnected={notebookLmConnected}
+        profiles={profiles}
+        activeProfile={activeProfile}
+        onSwitchProfile={handleSwitchProfile}
+        onCreateProfile={handleCreateProfile}
       />
       <main style={{ flex: 1, overflowY: 'auto', maxHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
         {retroPreviewActive && (
@@ -73,14 +118,14 @@ export default function App() {
             padding: '0.65rem 1.5rem',
             display: 'flex',
             alignItems: 'center',
-            justify: 'space-between',
+            justifyContent: 'space-between',
             fontSize: '0.85rem',
             fontWeight: 600,
             boxShadow: '0 4px 12px rgba(0,0,0,0.3)'
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
               <RefreshCw size={16} />
-              <span>RETRO PREVIEW MODE: Viewing Merged NotebookLM History ({retroData?.total_extracted || 5} Extracted Items, {retroData?.conflicts_detected || 1} Conflict Flagged) — Uncommitted</span>
+              <span>RETRO PREVIEW MODE: Viewing Merged NotebookLM History into "{activeProfile?.name}" ({retroData?.total_extracted || 5} Items) — Uncommitted</span>
             </div>
             <button 
               onClick={() => setActiveTab('settings')}

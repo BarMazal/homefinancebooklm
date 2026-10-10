@@ -3,10 +3,23 @@ from sqlalchemy import Column, Integer, String, Float, DateTime, Date, ForeignKe
 from sqlalchemy.orm import relationship
 from app.database import Base
 
+class Profile(Base):
+    __tablename__ = "profiles"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, index=True, unique=True) # e.g. "Demo Profile", "Personal Household"
+    is_active = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    accounts = relationship("Account", back_populates="profile", cascade="all, delete-orphan")
+    receipts = relationship("Receipt", back_populates="profile", cascade="all, delete-orphan")
+    pension_policies = relationship("PensionPolicy", back_populates="profile", cascade="all, delete-orphan")
+
 class Account(Base):
     __tablename__ = "accounts"
 
     id = Column(Integer, primary_key=True, index=True)
+    profile_id = Column(Integer, ForeignKey("profiles.id"), default=1)
     name = Column(String, index=True)
     type = Column(String)  # bank, credit_card, savings, kids_savings, pension, real_estate
     institution = Column(String, nullable=True) # e.g. Bank Leumi, Isracard, Altshuler
@@ -14,6 +27,7 @@ class Account(Base):
     current_balance = Column(Float, default=0.0)
     last_uploaded_at = Column(DateTime, nullable=True)
 
+    profile = relationship("Profile", back_populates="accounts")
     transactions = relationship("Transaction", back_populates="account", cascade="all, delete-orphan")
 
 class Transaction(Base):
@@ -21,6 +35,7 @@ class Transaction(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     account_id = Column(Integer, ForeignKey("accounts.id"))
+    profile_id = Column(Integer, ForeignKey("profiles.id"), default=1)
     date = Column(Date, index=True, default=date.today)
     amount = Column(Float, nullable=False) # positive = income, negative = expense
     currency = Column(String, default="ILS")
@@ -36,6 +51,7 @@ class Receipt(Base):
     __tablename__ = "receipts"
 
     id = Column(Integer, primary_key=True, index=True)
+    profile_id = Column(Integer, ForeignKey("profiles.id"), default=1)
     file_path = Column(String, nullable=False)
     merchant = Column(String, nullable=True)
     amount = Column(Float, nullable=True)
@@ -46,12 +62,14 @@ class Receipt(Base):
     status = Column(String, default="pending_review") # pending_review, confirmed, archived
     created_at = Column(DateTime, default=datetime.utcnow)
 
+    profile = relationship("Profile", back_populates="receipts")
     transaction = relationship("Transaction", back_populates="receipt", uselist=False)
 
 class PensionPolicy(Base):
     __tablename__ = "pension_policies"
 
     id = Column(Integer, primary_key=True, index=True)
+    profile_id = Column(Integer, ForeignKey("profiles.id"), default=1)
     policy_name = Column(String, index=True)
     provider = Column(String) # Clal, Migdal, Menora, Harel, etc.
     type = Column(String) # pension, insurance_life, insurance_health, insurance_home, keren_hishtalmut
@@ -62,10 +80,13 @@ class PensionPolicy(Base):
     accumulated_balance = Column(Float, default=0.0)
     notes = Column(Text, nullable=True)
 
+    profile = relationship("Profile", back_populates="pension_policies")
+
 class MortgageTrack(Base):
     __tablename__ = "mortgage_tracks"
 
     id = Column(Integer, primary_key=True, index=True)
+    profile_id = Column(Integer, ForeignKey("profiles.id"), default=1)
     property_name = Column(String, index=True) # e.g. Main Apartment
     track_name = Column(String) # Prime, Fixed Non-Linked, CPI-Linked
     original_amount = Column(Float)
