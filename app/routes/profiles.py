@@ -48,3 +48,14 @@ async def activate_profile(profile_id: int):
             return p_item
 
     raise HTTPException(status_code=404, detail="Profile not found")
+
+@router.post("/1/restore-demo")
+async def restore_demo_profile():
+    from app.database import get_engine_for_profile, Base, seed_demo_profile_data
+    engine, sessionmaker = get_engine_for_profile(1)
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.drop_all)
+        await conn.run_sync(Base.metadata.create_all)
+    async with sessionmaker() as session:
+        await seed_demo_profile_data(session)
+    return {"status": "success", "message": "Demo profile restored with full sample dataset."}

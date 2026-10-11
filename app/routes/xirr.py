@@ -44,11 +44,10 @@ async def get_portfolio_summary(db: AsyncSession = Depends(get_db)):
     tx_res = await db.execute(select(Transaction).where(Transaction.account_id.in_(account_ids)).order_by(Transaction.date.asc()))
     txs = tx_res.scalars().all()
 
-    dates = [t.date for t in txs]
-    amounts = [t.amount for t in txs]
-
-    if dates and len(dates) >= 2:
-        xirr_pct = calculate_portfolio_xirr(dates, amounts)
+    if txs and total_val > 0:
+        xirr_dates = [t.date for t in txs] + [date.today()]
+        xirr_amounts = [-abs(t.amount) for t in txs] + [total_val]
+        xirr_pct = calculate_portfolio_xirr(xirr_dates, xirr_amounts)
     else:
         xirr_pct = 0.0
 

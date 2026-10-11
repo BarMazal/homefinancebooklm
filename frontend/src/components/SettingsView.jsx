@@ -148,6 +148,16 @@ export default function SettingsView({
     setConfirmClearOpen(false);
   };
 
+  const handleRestoreDemo = async () => {
+    try {
+      await axios.post('http://127.0.0.1:8900/api/profiles/1/restore-demo');
+      alert('Demo Profile (Sample Data) has been fully restored with all accounts, cashflows, receipts, and policies!');
+      window.location.reload();
+    } catch (err) {
+      alert('Error restoring demo data.');
+    }
+  };
+
   return (
     <div style={{ padding: '2rem', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
       <div>
@@ -333,6 +343,12 @@ export default function SettingsView({
           <label htmlFor="db-import-file" className="btn-secondary" style={{ cursor: 'pointer' }}>
             <Upload size={16} /> Import Profile JSON Backup
           </label>
+
+          {activeProfile?.id === 1 && (
+            <button className="btn-secondary" onClick={handleRestoreDemo} style={{ color: '#34d399', borderColor: 'rgba(16, 185, 129, 0.4)' }}>
+              <RefreshCw size={16} color="#34d399" /> Restore Demo Sample Data
+            </button>
+          )}
 
           <button className="btn-secondary" onClick={() => setConfirmClearOpen(true)} style={{ color: '#fb7185', borderColor: 'rgba(244, 63, 94, 0.4)' }}>
             <Trash2 size={16} color="#fb7185" /> Reset Profile #{activeProfile?.id} Database
