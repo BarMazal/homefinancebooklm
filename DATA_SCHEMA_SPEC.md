@@ -1,258 +1,345 @@
 # Home Finance BookLM — Complete Data Architecture & Schema Specification
 
-This document defines the comprehensive data structure for **Home Finance BookLM**. It details every entity, every attribute, the architectural justification (**the WHY**), and the exact role each element plays across the application's hubs, calculations, and analytical reports.
+This document defines the comprehensive data structure for **Home Finance BookLM**. It details every entity, every attribute, the architectural justification (**the WHY**), and the exact role each element plays across the application's hubs, calculations, analytical reports, and NotebookLM integration.
 
 ---
 
-## 1. Architectural Philosophy: Local-First Intelligent AI
+## 1. Architectural Philosophy: Local-First Intelligent AI & Advisor Ecosystem
 
-The data model is designed around three governing principles:
-1. **Per-Profile Physical Isolation**: Each household, user, or experimentation scenario has its own SQLite database (`data/profile_<id>/homefinance.db`), uploaded asset folder (`data/profile_<id>/uploads/`), and isolated browser session (`.chromium_profile_<id>/`). No cross-contamination can occur.
+The architecture is built around four core principles:
+
+1. **Per-Profile Physical Isolation**: Each household, user, or scenario has its own SQLite database (`data/profile_<id>/homefinance.db`), uploaded asset folder (`data/profile_<id>/uploads/`), and isolated browser session (`.chromium_profile_<id>/`).
 2. **Determinism vs. Reasoning Separation**:
-   - **Local DB**: Stores deterministic, audit-proof, double-entry financial numbers, exact dates, tax identifiers, and amortization math.
-   - **NotebookLM Cloud**: Operates as the intelligent reasoning engine — parsing unstructured documents (receipts, salary slips, policy letters), performing semantic reconciliation, and generating strategic financial insights.
-3. **Multi-Currency & Compounding-Aware**: Built for real-world personal finance (handling ILS, USD, EUR, conversion rates, inflation linking, and compound returns).
+   - **Local DB**: Stores deterministic, audit-proof financial numbers, exact dates, tax identifiers, foreign exchange execution rates, and amortization schedules.
+   - **NotebookLM Cloud**: Serves as the reasoning engine — parsing unstructured documents (receipts, salary slips, policy letters), performing semantic reconciliation, and generating strategic insights.
+3. **Dual Notebook Roles: Profile Management vs. Domain Advisor Experts**:
+   - **`profile_management_notebook` (1:1 per Profile)**: Holds the user's actual personal financial records, receipts, bank statements, and family notes. Private and strictly bound to the profile.
+   - **`advisor_notebook` (Domain Experts, 1:N Shared Across Profiles)**:
+     - Contains **global, theoretical, and regulatory knowledge** (e.g., *Israeli Tax Law & Capital Gains*, *Mortgage Optimization Strategist*, *Pension & Insurance Fee Benchmark Advisor*, *Index Fund Portfolio Allocation*).
+     - Contains **NO permanent user data**.
+     - When the user consults an advisor, the local app injects a **temporary, bounded scenario slice** (e.g., current mortgage tranches) as a case study for advice. The expert analyzes the case, answers queries, and general insights can be saved back into the user's private notebook.
+4. **Resilience to Partial & Incremental Data**:
+   - Financial tracking is often done in stages (e.g. entering pension names today, adding policy fees weeks later).
+   - All models and analytics are **null-safe**: calculations never crash or hide records because a field is missing.
+   - The UI surfaces "Data Completeness" indicators to guide the user on what is missing without blocking analysis.
 
 ---
 
-## 2. Entity Specifications & Field-by-Field "WHY" Analysis
+## 2. High-Level Entity Relationship Diagram
 
 ```
 ┌────────────────────────────────────────────────────────────────────────┐
 │                                Profile                                 │
 └───────────────────────────────────┬────────────────────────────────────┘
                                     │ 1:N
-        ┌───────────────────────────┼───────────────────────────┐
-        ▼                           ▼                           ▼
-   ┌─────────┐               ┌─────────────┐             ┌─────────────┐
-   │ Account │               │   Receipt   │             │   Pension   │
-   └────┬────┘               └──────┬──────┘             │   Policy    │
-        │ 1:N                       │ 1:1                └─────────────┘
+        ┌───────────────────────────┼───────────────────────────────────┐
+        ▼                           ▼                                   ▼
+   ┌─────────┐               ┌─────────────┐                     ┌─────────────┐
+   │ Account │               │   Receipt   │                     │   Pension   │
+   └────┬────┘               └──────┬──────┘                     │   Policy    │
+        │ 1:N                       │ 1:1 (Evidentiary)          └─────────────┘
         ▼                           ▼
  ┌─────────────┐             ┌─────────────┐
- │ Transaction │◄────────────┤  Line Items │
- └─────────────┘             └─────────────┘
+ │ Transaction │◄────────────┤Receipt Item │ (Itemized breakdown)
+ └─────────────┘             │  (Split)    │
+                             └─────────────┘
+        │
+        ├───────────────────────────┐
+        ▼                           ▼
+┌──────────────┐            ┌──────────────┐
+│ Category     │            │ Transaction  │
+│ (Hierarchical│            │ Tags         │
+│ Tree $1 = $1)│            │ (Orthogonal) │
+└──────────────┘            └──────────────┘
+
+┌───────────────────────┐            ┌───────────────────────┐
+│ Real Estate Property  │◄── M : N ──►│    Mortgage Track     │
+│ (with Buy/Sell Taxes) │            │ (Tranche Amortization)│
+└───────────────────────┘            └───────────────────────┘
 ```
 
 ---
 
+## 3. Entity Specifications & Field-by-Field "WHY" Analysis
+
+---
+
 ### Table 1: `profiles`
-Represents an isolated financial entity (e.g., "Family Household", "Clean Slate", "Investment Portfolio", or "Rental Business").
+Represents an isolated financial household or experimental portfolio.
 
 | Column | Type | Constraints | Description |
 | :--- | :--- | :--- | :--- |
 | `id` | Integer | PK, Auto-Inc | Unique profile identifier (maps to folder `profile_<id>`). |
-| `name` | String(100) | Unique, Not Null | Human-readable label (e.g., "Personal Household", "Family Demo"). |
+| `name` | String(100) | Unique, Not Null | Profile display name (e.g., "Personal Household", "Family Demo"). |
 | `is_active` | Boolean | Default False | Flags which profile is currently loaded in the user session. |
-| `created_at` | DateTime | Default UTC | Timestamp when the profile environment was initialized. |
+| `created_at` | DateTime | Default UTC | Initialization timestamp. |
 
 #### **The WHY & Application Usage**:
-- **Why this table is needed**: Many families manage separate finances (e.g., joint household vs. private side-business, or parents' finances vs. personal). Profiles provide zero-bleed compartmentalization.
-- **Why each field exists**:
-  - `id`: Used directly by the dynamic session router in `app/database.py` to route SQLite queries to `data/profile_<id>/homefinance.db`.
-  - `is_active`: Allows seamless switching from the top navigation bar without logging in or losing state.
-  - `name`: Displayed on the top navigation bar, header badges, and export manifests.
-- **Used in**: Top Navbar profile selector, Profile Creation Modal, Database Export/Restore endpoints.
+- **Why this table is needed**: Allows managing distinct legal or personal financial spaces (e.g. family household vs. rental business vs. testing clean slate) without data leaks.
+- **Used in**: Navigation profile switcher, database backup/restore, file directory routing.
 
 ---
 
 ### Table 2: `accounts`
-Represents financial holding containers: checking accounts, credit card accounts, investment brokerage accounts, and children's savings funds.
+Financial holding containers: checking accounts, credit cards, brokerage accounts, and dedicated savings pots.
 
 | Column | Type | Constraints | Description |
 | :--- | :--- | :--- | :--- |
 | `id` | Integer | PK, Auto-Inc | Unique account identifier. |
 | `profile_id` | Integer | FK(profiles.id) | Owning profile. |
-| `name` | String(100) | Not Null | Account display name (e.g., "Leumi Checking", "IBKR Brokerage"). |
-| `type` | String(50) | Not Null | Account classification (`bank`, `credit_card`, `savings`, `brokerage`, `kids_savings`). |
-| `institution` | String(100) | Nullable | Financial institution (e.g., "Bank Leumi", "Interactive Brokers", "Max"). |
-| `currency` | String(3) | Default "ILS" | ISO currency code (`ILS`, `USD`, `EUR`). |
+| `name` | String(100) | Not Null | Account name (e.g., "Leumi Checking", "IBKR Brokerage", "Kids Fund"). |
+| `type` | String(50) | Not Null | `bank`, `credit_card`, `savings`, `brokerage`, `kids_savings`. |
+| `institution` | String(100) | Nullable | Institution name (e.g., "Bank Leumi", "Interactive Brokers", "Max"). |
+| `currency` | String(3) | Default "ILS" | Native account currency (`ILS`, `USD`, `EUR`). |
 | `current_balance` | Float | Default 0.0 | Latest known balance/valuation. |
-| `last_uploaded_at` | DateTime | Nullable | Timestamp of the most recent statement upload. |
+| `last_uploaded_at` | DateTime | Nullable | Most recent statement sync timestamp. |
 
 #### **The WHY & Application Usage**:
-- **Why this table is needed**: Financial transactions do not exist in a vacuum; they belong to a liquidity source (bank) or liability source (credit card). Grouping by account allows calculating actual liquid net worth vs. credit debt.
-- **Why each field exists**:
-  - `type`: Governs how the account is treated in net worth calculation:
-    - `bank` & `savings`: Treated as positive liquidity assets.
-    - `credit_card`: Treated as current liabilities (subtracted from liquid cash).
-    - `kids_savings`: Displayed in dedicated 18-Year Compound Growth simulator.
-    - `brokerage`: Feed into the dynamic XIRR and investment performance engine.
-  - `currency`: Critical for multi-currency households (e.g., foreign currency holdings in USD vs. domestic ILS).
-  - `institution`: Used in the Expenses Hub to display per-institution breakdowns and statement sync freshness.
-- **Used in**: Executive Overview (Net Worth breakdown), Expenses Hub (account filter dropdowns), Savings & Investments Hub (Brokerage vs. Kids accounts).
+- **Why this table is needed**: Cashflows must be anchored to liquidity or liability sources to track actual liquid net worth vs. revolving credit debt.
+- **Used in**: Executive Overview (Net Worth), Expenses Hub (account filters), Savings & Investments (XIRR portfolio balance).
 
 ---
 
 ### Table 3: `transactions`
-The core ledger: records all cash inflows (salary, dividends, transfers) and outflows (expenses, bills, investments).
+The core cashflow ledger. Handles multi-currency conversions, commissions, and timestamps.
 
 | Column | Type | Constraints | Description |
 | :--- | :--- | :--- | :--- |
 | `id` | Integer | PK, Auto-Inc | Unique transaction identifier. |
-| `account_id` | Integer | FK(accounts.id) | Account through which the transaction took place. |
+| `account_id` | Integer | FK(accounts.id) | Account used for the charge/deposit. |
 | `profile_id` | Integer | FK(profiles.id) | Owning profile. |
-| `date` | Date | Not Null, Index | Effective date of the charge or deposit. |
-| `amount` | Float | Not Null | Signed amount: **Negative** for expenses (`-250.0`), **Positive** for income (`+15000.0`). |
-| `currency` | String(3) | Default "ILS" | Currency of transaction. |
-| `merchant` | String(150) | Not Null, Index | Merchant name or payee (e.g., "Shufersal", "Israel Electric Corp"). |
-| `cluster` | String(50) | Default "Uncategorized" | High-level budget category (`Groceries`, `Housing`, `Utilities`, `Salary`, `Investments`). |
-| `notes` | Text | Nullable | User or OCR annotations, bank statement description, or NotebookLM reference. |
-| `receipt_id` | Integer | FK(receipts.id), Nullable | Linked scanned receipt (if itemized). |
+| `date` | DateTime | Not Null, Index | Effective transaction timestamp (with time if available, or 00:00:00). |
+| `amount` | Float | Not Null | Effective amount in **profile base currency (ILS)**. Negative for expenses, positive for income. |
+| `original_amount` | Float | Nullable | Amount in foreign currency before conversion (e.g., `120.00` for $120). |
+| `original_currency`| String(3) | Default "ILS" | Currency at point of sale (`USD`, `EUR`, `GBP`). |
+| `exchange_rate` | Float | Default 1.0 | Actual conversion rate applied by the specific card/bank at execution (e.g., `3.65`). |
+| `fee_amount` | Float | Default 0.0 | Bank/card conversion fee or commission (in ILS). |
+| `merchant` | String(150) | Not Null, Index | Payee or merchant name. |
+| `category_id` | Integer | FK(categories.id) | Primary hierarchical category leaf (e.g., `Car > Fuel`). |
+| `notes` | Text | Nullable | Statement description, OCR notes, or user remarks. |
+| `receipt_id` | Integer | FK(receipts.id), Nullable | Linked evidentiary receipt (if scanned/uploaded). |
 
 #### **The WHY & Application Usage**:
-- **Why this table is needed**: Accurate cashflow tracking requires a granular, time-series log of all financial events.
-- **Why each field exists**:
-  - `amount`: Signed convention (`-` for spend, `+` for revenue) enables direct mathematical aggregation (`SUM(amount)` over a month gives net cashflow).
-  - `date`: Essential for monthly burn rate curves, year-over-year comparisons, and XIRR cashflow discount discounting.
-  - `cluster`: Drives the visual donut charts, expense clustering, and budget alerts.
-  - `receipt_id`: Links macro transactions on a credit card statement to their micro line-item receipt breakdown in the Receipt Vault.
-- **Used in**:
-  - **Executive Overview**: Monthly cashflow chart (Income vs. Burn rate), expense category distribution donut chart.
-  - **Expenses Hub**: Searchable transaction ledger, date-range filters, category drilldowns.
-  - **Scenario Simulator**: Historical baseline for simulating inflation shocks, mortgage interest rate changes, or income adjustments.
+- **Why `DateTime` instead of just `Date`?**: Preserves the chronological order of transactions that occur on the same day (e.g., morning coffee, afternoon supermarket, evening restaurant) and enables exact timestamp matching against digital receipts.
+- **Why per-transaction `exchange_rate` and `fee_amount`?**: Foreign currency transactions do not use official mid-market rates; each card company and broker adds their own markup (e.g., 2.5% FX fee or specific broker conversion rate). Storing the exact conversion rate and fee ensures the local ledger reconciles to the penny with the actual bank statement.
+- **Why `amount` is in base currency (ILS)**: Allows fast, exact aggregations (`SUM(amount)`) without doing runtime FX lookups for past dates.
+- **Used in**: Cashflow charts, monthly burn rate curves, Expenses Hub ledger, Scenario Simulator.
 
 ---
 
-### Table 4: `receipts`
-Stores digital assets and OCR/LLM-parsed data for physical receipts and invoices.
+### Table 4: `receipts` (Evidentiary Document)
+Stores digital receipt artifacts (images/PDFs) and document-level metadata.
 
 | Column | Type | Constraints | Description |
 | :--- | :--- | :--- | :--- |
-| `id` | Integer | PK, Auto-Inc | Unique receipt record identifier. |
+| `id` | Integer | PK, Auto-Inc | Unique receipt identifier. |
 | `profile_id` | Integer | FK(profiles.id) | Owning profile. |
-| `file_path` | String(255) | Not Null | Local file path under `data/profile_<id>/uploads/`. |
-| `merchant` | String(150) | Nullable | Detected merchant (e.g., "Super-Pharm", "IKEA"). |
-| `amount` | Float | Nullable | Detected total receipt bill amount. |
-| `date` | Date | Nullable | Detected date printed on the receipt. |
-| `category` | String(50) | Default "Uncategorized" | Inferred category. |
-| `line_items` | JSON | Default `[]` | Itemized product list: `[{ item: str, price: float, confidence: float }]`. |
-| `confidence_scores` | JSON | Default `{}` | OCR/LLM extraction confidence for each key attribute. |
-| `status` | String(30) | Default "pending_review" | Workflow status: `pending_review`, `confirmed`, `archived`. |
+| `file_path` | String(255) | Not Null | Local path under `data/profile_<id>/uploads/`. |
+| `merchant` | String(150) | Nullable | Merchant name detected on the header. |
+| `total_amount` | Float | Nullable | Total bill amount stamped on the receipt. |
+| `date` | DateTime | Nullable | Transaction date & time printed on the receipt. |
+| `invoice_number` | String(100) | Nullable | Official invoice/tax receipt number (מספר חשבונית / קבלה). |
+| `status` | String(30) | Default "pending_review" | `pending_review`, `confirmed`, `archived`. |
 | `created_at` | DateTime | Default UTC | Upload timestamp. |
 
-#### **The WHY & Application Usage**:
-- **Why this table is needed**: Credit card statements only show lump sums (e.g., "₪ 850 at Shufersal"). They don't reveal how much went to food vs. cleaning supplies vs. alcohol. The receipts table preserves the raw digital artifact and enables line-item visibility.
-- **Why each field exists**:
-  - `file_path`: Anchors the image securely on local storage for visual inspection.
-  - `line_items`: A JSON array storing the parsed receipt breakdown so users can inspect SKU-level price changes over time.
-  - `confidence_scores`: Highlights low-confidence extractions in orange/yellow so the user can verify before confirming.
-  - `status`: Prevents unverified OCR readings from corrupting the master ledger.
-- **Used in**: Receipt Vault (image preview, side-by-side verification editor, line item breakdown).
+#### **The WHY & Relationship to Transactions**:
+- **How to avoid duplication between Receipts and Transactions**:
+  - A `Receipt` is **evidence**, not a duplicate cash outflow.
+  - The bank/credit card statement has 1 line: `-₪ 450.00 at Shufersal` (`Transaction`).
+  - The `Receipt` confirms this transaction with the physical image, tax invoice number, and cashier timestamp.
+  - The relationship is 1:1 between the macro `Transaction` and the `Receipt`. Total cashflow counts ONLY the `Transaction.amount` to prevent double counting.
 
 ---
 
-### Table 5: `pension_policies`
-Tracks retirement funds, study funds (Keren Hishtalmut), and insurance policies.
+### Table 5: `receipt_items` (Split Itemization)
+Stores itemized SKU-level line items extracted from a receipt.
+
+| Column | Type | Constraints | Description |
+| :--- | :--- | :--- | :--- |
+| `id` | Integer | PK, Auto-Inc | Unique item identifier. |
+| `receipt_id` | Integer | FK(receipts.id) | Parent receipt. |
+| `name` | String(150) | Not Null | Item name (e.g., "Tnuva 3% Milk 1L", "Finish Dishwasher Tablets"). |
+| `price` | Float | Not Null | Item total price (₪). |
+| `quantity` | Float | Default 1.0 | Quantity purchased. |
+| `category_id` | Integer | FK(categories.id) | Specific item category (e.g., `Groceries > Dairy` vs `Household > Cleaning`). |
+| `confidence` | Float | Default 1.0 | OCR / LLM extraction confidence (0.0 to 1.0). |
+
+#### **The WHY & Application Usage**:
+- **Why this table is needed**: A ₪ 500 supermarket trip contains groceries, baby diapers, and household cleaning supplies. `receipt_items` allows breaking down the macro transaction into precise sub-categories without creating 30 separate bank transactions.
+- **Used in**: Receipt Vault inspection, inflation/price tracking over time for identical items, granular category analytics.
+
+---
+
+### Table 6: `categories` & `transaction_tags` (Hierarchy & Multi-Classification)
+
+#### **1. Category Hierarchy (Strict Tree: $1 = $1)**
+To prevent double-counting in budgets, every transaction or receipt item belongs to **exactly one leaf node** in a hierarchical category tree:
+
+```
+├── Housing
+│   ├── Rent
+│   ├── Maintenance & Vaad Bayit
+│   └── Insurance (Home)
+├── Car & Transport
+│   ├── Fuel
+│   ├── Maintenance & Repairs
+│   └── Insurance (Car)
+├── Groceries & Food
+│   ├── Supermarket
+│   ├── Restaurants & Cafes
+│   └── Sweets & Snacks
+└── Insurance (Personal)
+    ├── Health Insurance
+    └── Life Insurance
+```
+
+| Column | Type | Constraints | Description |
+| :--- | :--- | :--- | :--- |
+| `id` | Integer | PK, Auto-Inc | Unique category identifier. |
+| `parent_id` | Integer | FK(categories.id), Nullable | Parent category (null for root categories). |
+| `name` | String(100) | Not Null | Category name (e.g., "Fuel", "Car", "Insurance"). |
+| `full_path` | String(255) | Index | Materialized path (e.g., `Car/Insurance`, `Housing/Insurance`). |
+
+#### **2. Orthogonal Tags (Multi-Label Facets)**
+Items often have cross-cutting dimensions that should not break the category tree:
+- A trip to the supermarket for vacation supplies: Category = `Groceries > Supermarket`, Tag = `#vacation`.
+- A doctor visit for a child: Category = `Health > Specialist`, Tag = `#kids`.
+- A business lunch: Category = `Food > Restaurants`, Tag = `#work_reimbursable`.
+
+| Column | Type | Constraints | Description |
+| :--- | :--- | :--- | :--- |
+| `transaction_id` | Integer | FK(transactions.id), PK | Linked transaction. |
+| `tag` | String(50) | PK, Index | Orthogonal tag (e.g., `vacation`, `kids`, `reimbursable`). |
+
+#### **The WHY & Solving Double-Counting**:
+- When calculating monthly spending or budget totals, the system groups strictly by the **Category Tree**. Because every expense has exactly one leaf category, mathematical summation is 100% additive ($1 is counted once).
+- When the user wants to see "How much did our trip to Eilat cost?", the app queries `WHERE tag = 'vacation'`, aggregating across Hotels, Fuel, Restaurants, and Attractions without interfering with the standard monthly budget.
+
+---
+
+### Table 7: `pension_policies`
+Retirement funds, study funds (Keren Hishtalmut), and insurance policies.
 
 | Column | Type | Constraints | Description |
 | :--- | :--- | :--- | :--- |
 | `id` | Integer | PK, Auto-Inc | Unique policy identifier. |
 | `profile_id` | Integer | FK(profiles.id) | Owning profile. |
-| `policy_name` | String(150) | Not Null | Plan description (e.g., "Menora Comprehensive Pension", "Migdal Keren Hishtalmut"). |
-| `provider` | String(100) | Not Null | Underwriter / Institutional manager (e.g., "Menora", "Altshuler Shaham", "Harel"). |
-| `type` | String(50) | Not Null | Policy type: `pension`, `keren_hishtalmut`, `insurance_life`, `insurance_health`, `insurance_home`. |
-| `monthly_premium` | Float | Default 0.0 | Monthly ongoing deposit or insurance cost (₪). |
-| `management_fee_deposit` | Float | Default 0.0 | Management fee charged on ongoing deposits (% from contribution). |
-| `management_fee_accumulation` | Float | Default 0.0 | Management fee charged on total accumulated balance (% from AUM). |
-| `covered_amount` | Float | Default 0.0 | In case of insurance: total insured payout amount. |
-| `accumulated_balance` | Float | Default 0.0 | Current value of the retirement pot (₪). |
-| `notes` | Text | Nullable | Policy terms, retirement age projections, beneficiary notes. |
+| `policy_name` | String(150) | Not Null | Plan label (e.g., "Menora Comprehensive Pension"). |
+| `provider` | String(100) | Nullable | Underwriter (e.g., "Menora", "Altshuler", "Harel"). |
+| `type` | String(50) | Nullable | `pension`, `keren_hishtalmut`, `insurance_health`, `insurance_life`. |
+| `monthly_premium` | Float | Default 0.0 | Ongoing monthly deposit or insurance premium (₪). |
+| `management_fee_deposit` | Float | Default 0.0 | Fee on monthly deposits (% from contribution). |
+| `management_fee_accumulation` | Float | Default 0.0 | Fee on total accumulated balance (% from AUM). |
+| `accumulated_balance`| Float | Default 0.0 | Current portfolio valuation (₪). |
+| `covered_amount` | Float | Default 0.0 | Insured payout sum (in case of life/disability/health). |
+| `completeness_score` | Float | Default 0.0 | Percentage of fields completed (0% - 100%). |
+| `notes` | Text | Nullable | Policy numbers, missing documents, agent remarks. |
 
-#### **The WHY & Application Usage**:
-- **Why this table is needed**: In personal finance, pension and insurance fees erode millions over a career. Tracking deposit fees (דמי ניהול מהפקדה) and accumulation fees (דמי ניהול מצבירה) is essential for fee optimization.
-- **Why each field exists**:
-  - `management_fee_deposit` & `management_fee_accumulation`: Directly feeds the fee comparison benchmark vs. Israeli national regulatory maximums (0.5% AUM / 4% deposit).
-  - `accumulated_balance`: Included in total household Net Worth calculation.
-  - `monthly_premium`: Added to the recurring monthly commitments in the Scenario Simulator.
-- **Used in**: Pensions & Insurances Hub (fee benchmarks, duplicate coverage detector, total accumulated wealth meter).
+#### **The WHY & Resilience to Partial Data**:
+- **Why this structure is needed**: Users rarely have their full pension details on day 1. They might only know their provider and that they have a pension.
+- **Handling Partial Data**: All numeric fields default to 0.0. The policy is displayed immediately in the Pensions Hub with a "Missing Management Fees" badge. Net worth calculations use the known `accumulated_balance`, and the app does not fail if fee percentages are unknown.
+- **Used in**: Pensions & Insurances Hub, Fee Optimization Benchmark, Retirement Runway projection.
 
 ---
 
-### Table 6: `real_estate_properties`
-Tracks physical real estate assets (primary residence, rental investments, land).
+### Table 8: `real_estate_properties`
+Real estate holdings with acquisition costs, ongoing yield, and tax basis.
 
 | Column | Type | Constraints | Description |
 | :--- | :--- | :--- | :--- |
 | `id` | Integer | PK, Auto-Inc | Unique property identifier. |
 | `profile_id` | Integer | FK(profiles.id) | Owning profile. |
-| `name` | String(150) | Not Null | Asset identifier (e.g., "Tel Aviv 4-Room Apt", "Haifa Investment Studio"). |
-| `estimated_value` | Float | Default 0.0 | Current estimated fair market value (₪). |
-| `monthly_rent` | Float | Default 0.0 | Gross monthly rental income received (₪/month). |
-| `annual_maintenance` | Float | Default 0.0 | Annual upkeep costs, municipal taxes (Arnona), insurance (₪/year). |
+| `name` | String(150) | Not Null | Asset identifier (e.g., "Tel Aviv 4-Room Apt", "Haifa Rental"). |
+| `estimated_value` | Float | Default 0.0 | Current fair market value (₪). |
+| `monthly_rent` | Float | Default 0.0 | Gross monthly rental income (₪/month). |
+| `annual_maintenance` | Float | Default 0.0 | Upkeep, Arnona, insurance (₪/year). |
+| `purchase_price` | Float | Default 0.0 | Original purchase price (₪). |
+| `purchase_tax` | Float | Default 0.0 | Purchase tax paid (Mas Rechisha - מס רכישה). |
+| `acquisition_fees` | Float | Default 0.0 | Advocate/legal fees, agent broker fees paid at purchase. |
+| `renovation_cost` | Float | Default 0.0 | Capital improvements invested (added to cost basis). |
+| `estimated_exit_tax` | Float | Default 0.0 | Estimated capital gains / betterment tax on sale (Mas Shevach / Hetel Hashbacha). |
 
-#### **The WHY & Application Usage**:
-- **Why this table is needed**: Real estate often represents the largest portion of household equity and a primary source of passive income.
-- **Why each field exists**:
-  - `estimated_value`: Forms the asset side of real estate net worth.
-  - `monthly_rent` & `annual_maintenance`: Calculates **Net Rental Yield**:
-    $$\text{Net Yield} = \frac{(\text{monthly\_rent} \times 12) - \text{annual\_maintenance}}{\text{estimated\_value}} \times 100$$
-- **Used in**: Real Estate & Mortgages Hub (Portfolio Value, Net Rental Yield card, LTV equity bar).
+#### **The WHY & Tax Integration**:
+- Real estate returns are heavily distorted if purchase taxes (Mas Rechisha), legal fees, and renovations are ignored.
+- Storing acquisition costs calculates true **Adjusted Cost Basis**:
+  $$\text{Cost Basis} = \text{purchase\_price} + \text{purchase\_tax} + \text{acquisition\_fees} + \text{renovation\_cost}$$
+- Net equity considers outstanding mortgage debt and potential exit tax (Mas Shevach) upon sale.
+- **Used in**: Real Estate & Mortgages Hub (Net Rental Yield, LTV equity bar, liquidation scenario simulator).
 
 ---
 
-### Table 7: `mortgage_tracks`
-Tracks individual loan tranches within a property's mortgage portfolio.
+### Table 9: `mortgage_tracks` & `property_mortgage_links` (Many-to-Many Linking)
 
+A mortgage can be secured against multiple properties, and a property can have multiple mortgages (e.g. Bank Leumi 1st lien + Mezzanine loan).
+
+#### **Table: `mortgage_tracks`**
 | Column | Type | Constraints | Description |
 | :--- | :--- | :--- | :--- |
 | `id` | Integer | PK, Auto-Inc | Unique mortgage tranche identifier. |
 | `profile_id` | Integer | FK(profiles.id) | Owning profile. |
-| `property_name` | String(150) | Not Null, Index | Name of associated property. |
-| `track_name` | String(100) | Not Null | Track mechanism: `Prime`, `Fixed Non-Linked (Kalatz)`, `CPI-Linked Variable`. |
-| `original_amount` | Float | Not Null | Initial principal borrowed. |
-| `remaining_balance` | Float | Not Null | Current outstanding debt balance (₪). |
-| `interest_rate` | Float | Not Null | Current annual interest rate (e.g., `4.85` for 4.85%). |
-| `monthly_payment` | Float | Not Null | Current monthly repayment tranche (₪/month). |
-| `end_date` | Date | Not Null | Scheduled maturity / payoff date. |
+| `bank_name` | String(100) | Not Null | Lending bank (e.g., "Bank Mizrahi Tefahot", "Bank Leumi"). |
+| `track_name` | String(100) | Not Null | Mechanism: `Prime`, `Kalatz (Fixed Non-Linked)`, `CPI-Linked Variable`. |
+| `original_amount` | Float | Not Null | Principal borrowed (₪). |
+| `remaining_balance` | Float | Not Null | Outstanding debt balance (₪). |
+| `interest_rate` | Float | Not Null | Annual interest rate (% e.g., `4.85`). |
+| `monthly_payment` | Float | Not Null | Monthly debt service (₪/month). |
+| `end_date` | Date | Not Null | Maturity date. |
 
-#### **The WHY & Application Usage**:
-- **Why this table is needed**: Israeli mortgages are split across multiple tranches (e.g., 1/3 Prime, 1/3 Kalatz, 1/3 CPI-Linked), each with its own rate, term, and inflation risk. Treating a mortgage as a single number prevents refinancing analysis.
-- **Why each field exists**:
-  - `remaining_balance`: Subtracted from `RealEstateProperty.estimated_value` to determine true **Net Real Estate Equity** and **Loan-To-Value (LTV)** percentage.
-  - `interest_rate` & `track_name`: Feeds the Scenario Simulator to model what happens if the Bank of Israel raises Prime interest rates by 1.5%.
-- **Used in**: Real Estate & Mortgages Hub (Tranche amortization table, Total Debt vs. Equity chart), Scenario Simulator (Interest Rate Shock stress-test).
+#### **Table: `property_mortgage_links` (Junction Table)**
+| Column | Type | Constraints | Description |
+| :--- | :--- | :--- | :--- |
+| `property_id` | Integer | FK(real_estate_properties.id), PK | Property asset. |
+| `mortgage_track_id`| Integer | FK(mortgage_tracks.id), PK | Mortgage tranche. |
+| `collateral_share` | Float | Default 1.0 | Percentage of this mortgage secured by this property (0.0 to 1.0). |
+
+#### **The WHY & Bidirectional Awareness**:
+- The property knows its exact mortgage liabilities (aggregating all linked mortgage tracks).
+- The mortgage knows which physical collateral properties back it.
+- **Used in**: Property LTV calculation, Refinancing Simulator, Bank of Israel Prime shock stress-testing.
 
 ---
 
-### Table 8: `settings`
-Stores profile-specific configuration and integrations.
+### Table 10: `advisor_notebooks` (Domain Experts)
+Registers global advisor notebooks accessible across profiles.
 
 | Column | Type | Constraints | Description |
 | :--- | :--- | :--- | :--- |
-| `id` | Integer | PK, Auto-Inc | Unique setting identifier. |
-| `key` | String(100) | Unique, Index | Setting key (e.g., `notebooklm_notebook_id`, `preferred_currency`). |
-| `value` | Text | Nullable | Setting payload / value string. |
-
-#### **The WHY & Application Usage**:
-- **Why this table is needed**: Keeps integration bindings (like the linked NotebookLM notebook ID) cleanly separated from the financial records themselves.
-- **Used in**: Settings & Auth View (Notebook link state, app configuration persistence).
-
----
-
-## 3. How NotebookLM Documents Map to This Schema
-
-When extracting data from documents stored in a connected NotebookLM notebook, the extraction prompts are targeted directly at the schema above:
-
-| NotebookLM Resource / Source Document | Target Application Entity | Extracted Attributes |
-| :--- | :--- | :--- |
-| **Store Receipts (PDF / JPG)** | `receipts` + `transactions` | Merchant name, Date, Total Amount, Line item prices (`line_items`). |
-| **Bank Statements (PDF / CSV)** | `transactions` + `accounts` | Bank name, Account balance, Date, Payee, Signed Amount, Category. |
-| **Credit Card Reports (PDF / Excel)**| `transactions` | Card provider, Transaction date, Billing date, Merchant, Amount. |
-| **Annual Pension Statements (דוח שנתי)**| `pension_policies` | Provider, Policy name, Accumulated balance, Deposit fee %, Accumulation fee %, Monthly deposit. |
-| **Mortgage Schedules (לוח סילוקין)** | `mortgage_tracks` | Track type (Prime/Kalatz), Remaining balance, Interest rate, Monthly payment, End date. |
+| `id` | Integer | PK, Auto-Inc | Unique advisor identifier. |
+| `notebook_id` | String(100) | Unique, Not Null | Google NotebookLM Notebook ID. |
+| `title` | String(150) | Not Null | Display name (e.g., "Israeli Real Estate Tax Specialist", "Mortgage Strategist"). |
+| `domain` | String(50) | Not Null | Domain classification (`tax`, `mortgages`, `pensions`, `investments`). |
+| `description` | Text | Nullable | Overview of the advisor's theoretical knowledge and resources. |
+| `is_shared` | Boolean | Default True | Accessible by all profiles. |
 
 ---
 
-## 4. Summary Table of Application Views vs. Schema Entities
+## 4. Handling Incomplete & Partial Ingestion Workflows
 
-| Application View | Entities Read / Written | Primary Calculated Metrics |
-| :--- | :--- | :--- |
-| **Executive Overview** | `accounts`, `transactions`, `pension_policies`, `real_estate_properties`, `mortgage_tracks` | Total Net Worth, Monthly Inflow/Outflow, Liquid vs. Illiquid Asset distribution. |
-| **Expenses Hub** | `accounts`, `transactions`, `receipts` | Monthly burn rate, Category clustering, Cash vs. Credit split, Merchant frequency. |
-| **Savings & Investments**| `accounts` (brokerage & kids), `transactions` | Portfolio Valuation, Time-weighted deposits, Dynamic XIRR, Kids 18-Year compounding projection. |
-| **Pensions & Insurances**| `pension_policies` | Total Retirement Pot, Monthly policy commitment, Fee benchmarking vs. national standards. |
-| **Real Estate & Mortgages**| `real_estate_properties`, `mortgage_tracks` | Net Real Estate Equity, LTV Ratio, Net Rental Yield, Monthly mortgage liability. |
-| **Receipt Vault** | `receipts`, `transactions` | Pending OCR review count, SKU-level itemization, Confidence scoring. |
-| **Scenario Simulator** | `transactions`, `mortgage_tracks`, `pension_policies` | Stress-testing cashflow against inflation, interest rate hikes, and emergency fund runways. |
-| **Settings & Auth** | `profiles`, `settings` | Active Profile ID, Linked NotebookLM Notebook ID, Local SQLite backup/restore. |
+In real personal finance, users input data incrementally. The application handles this through four concrete mechanisms:
+
+1. **Null-Safe Default Aggregations**:
+   - Every analytical formula provides fallbacks: `remaining_balance || 0.0`, `interest_rate || 0.0`.
+   - The UI never renders blank error screens; missing values display as `—` with an edit pencil.
+2. **Entity Completeness Badges**:
+   - Each entity displays an amber badge if required financial attributes are missing:
+     - `⚠️ Missing: Management Fees (0/2 filled)`
+     - `⚠️ Missing: Amortization End Date`
+3. **NotebookLM Incremental Gap-Filling**:
+   - When the user uploads a new document later (e.g. a new pension letter), the system prompts NotebookLM:
+     > *"We currently have a pension record for Menora with balance ₪ 450,000, but missing management fees. From this new document, can you find and extract the missing deposit fee and accumulation fee?"*
+   - NotebookLM returns the missing fields to patch the existing record without duplicating it.
+
+---
+
+## 5. Summary Table: Application Views vs. Schema Entities
+
+| Application Hub | Primary Entities | Calculated KPIs & Analytics | Partial Data Behavior |
+| :--- | :--- | :--- | :--- |
+| **Executive Overview** | `accounts`, `transactions`, `pension_policies`, `real_estate_properties`, `mortgage_tracks` | Total Net Worth, Monthly Net Cashflow, Liquid vs Illiquid assets. | Omits missing balances gracefully, displays net worth based on known assets. |
+| **Expenses Hub** | `accounts`, `transactions`, `receipts`, `receipt_items`, `categories` | Monthly burn rate, Category tree drilldown, Multi-currency FX fees, Tagged expenses. | Uncategorized items fall into "Uncategorized" bucket; multi-currency items show both native and converted ILS. |
+| **Savings & Investments**| `accounts` (brokerage & kids), `transactions` | Time-weighted deposits, Dynamic XIRR yield, 18-Year Compound Simulator. | XIRR computes over known cashflow dates; missing valuations prompt user. |
+| **Pensions & Insurances**| `pension_policies` | Total Retirement Equity, Fee Benchmarks vs Israeli Caps, Coverage Audit. | Displays known policies; flags missing fee percentages without crashing. |
+| **Real Estate & Mortgages**| `real_estate_properties`, `mortgage_tracks`, `property_mortgage_links` | Net Equity, Net Rental Yield, LTV Ratios, Adjusted Cost Basis (with taxes). | Calculates yield if rent and value exist; shows mortgage debt per linked tranche. |
+| **Receipt Vault** | `receipts`, `receipt_items`, `transactions` | Official invoice archive, Line-item SKU extraction, Confidence scoring. | Unreviewed receipts remain in "Pending Review" without affecting the master ledger. |
+| **Scenario Simulator** | `transactions`, `mortgage_tracks`, `pension_policies` | Inflation sensitivity, Bank of Israel Prime rate shocks, Emergency runway. | Simulates shocks on populated tranches; ignores tracks with missing rates. |
+| **Settings & Advisors** | `profiles`, `settings`, `advisor_notebooks` | Active Profile ID, Linked Personal Notebook, Advisor Expert consultations. | Allows switching advisors and inspecting resources/artifacts dynamically. |
