@@ -1,15 +1,20 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from datetime import date, datetime
+from pydantic import BaseModel
 
 from app.database import get_db
 from app.models import Transaction, Account, Receipt, PensionPolicy
 from app.schemas import RetroCommitRequest
 from app.services.notebooklm_service import notebooklm_service
+from app.services.profile_manager import profile_manager
 
 router = APIRouter(prefix="/api/notebooklm", tags=["NotebookLM"])
+
+class LinkNotebookRequest(BaseModel):
+    notebook_id: str
 
 @router.post("/launch-auth-browser")
 async def launch_auth_browser():
@@ -20,6 +25,59 @@ async def launch_auth_browser():
 async def get_notebooklm_status():
     status = await notebooklm_service.check_connection_status()
     return status
+
+@router.get("/notebooks")
+async def list_notebooks():
+    """
+    Scans the connected NotebookLM account and lists all notebooks.
+    If not authenticated, returns authenticated: false.
+    """
+    result = await notebooklm_service.list_notebooks()
+    return result
+
+@router.get("/notebooks/{notebook_id}/details")
+async def get_notebook_details(notebook_id: str):
+    """
+    Returns resources (sources), notes, and artifacts inside the chosen notebook.
+    """
+    result = await notebooklm_service.get_notebook_details(notebook_id)
+    return result
+
+@router.get("/notebooks/{notebook_id}/source/{source_id}/fulltext")
+async def get_source_fulltext(notebook_id: str, source_id: str):
+    """
+    Returns the full text content of a source in the notebook.
+    """
+    result = await notebooklm_service.get_source_fulltext(notebook_id, source_id)
+    return result
+
+@router.post("/link-notebook")
+async def link_notebook(req: LinkNotebookRequest):
+    """
+    Links a notebook to the active profile after checking duplicate sharing restrictions.
+    """
+    profile_id = profile_manager.get_active_profile_id()
+    clean_id = req.notebook_id.strip()
+
+    # Check duplicate sharing rule
+    check = profile_manager.check_notebook_id_sharing(profile_id, clean_id)
+    if check.get("is_shared"):
+        return {
+            "success": False,
+            "warning": True,
+            "message": check["message"]
+        }
+
+    # Save to profile settings
+    settings = profile_manager.load_profile_settings(profile_id)
+    settings["notebooklm_notebook_id"] = clean_id
+    profile_manager.save_profile_settings(profile_id, settings)
+
+    return {
+        "success": True,
+        "notebook_id": clean_id,
+        "message": f"Successfully linked notebook to Profile #{profile_id}"
+    }
 
 @router.post("/scan-retro")
 async def scan_retroactive_history(db: AsyncSession = Depends(get_db)):
@@ -33,7 +91,6 @@ async def scan_retroactive_history(db: AsyncSession = Depends(get_db)):
     
     existing_keys = set()
     for tx in existing_txs:
-        # Unique signature key: date + merchant lower + abs amount
         key = f"{tx.date}_{tx.merchant.strip().lower()}_{abs(tx.amount)}"
         existing_keys.add(key)
 
@@ -79,7 +136,7 @@ async def commit_retroactive_history(req: RetroCommitRequest, db: AsyncSession =
     committed_count = 0
     for item in req.items:
         if item.get("has_conflict"):
-            continue # Skip conflicted items unless explicitly approved
+            continue
 
         tx = Transaction(
             account_id=req.account_id,
