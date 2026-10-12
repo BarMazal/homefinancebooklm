@@ -63,7 +63,7 @@
 ---
 
 ## 4. Non-Functional Requirements
-- **NFR-1 (Privacy & Local First)**: All financial records stored locally in SQLite (`data/homefinance.db`).
+- **NFR-1 (Privacy & Local First)**: All financial records stored locally in per-profile SQLite databases (`data/profile_<id>/homefinance.db`), with isolated file uploads in `data/profile_<id>/uploads/` and dedicated Chromium browser data in `.chromium_profile_<id>/`.
 - **NFR-2 (Performance)**: Dashboard load time < 1 second; receipt parsing & OCR < 5 seconds per image.
 - **NFR-3 (Responsiveness)**: Modern, glassmorphic dark-mode web interface optimized for desktop and tablet screens.
 
