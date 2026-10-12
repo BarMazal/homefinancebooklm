@@ -6,7 +6,7 @@ This document defines the comprehensive data structure for **Home Finance BookLM
 
 ## 1. Architectural Philosophy: Local-First Intelligent AI & Advisor Ecosystem
 
-The architecture is built around four core principles:
+The architecture is built around five core principles:
 
 1. **Per-Profile Physical Isolation**: Each household, user, or scenario has its own SQLite database (`data/profile_<id>/homefinance.db`), uploaded asset folder (`data/profile_<id>/uploads/`), and isolated browser session (`.chromium_profile_<id>/`).
 2. **Determinism vs. Reasoning Separation**:
@@ -15,10 +15,13 @@ The architecture is built around four core principles:
 3. **Dual Notebook Roles: Profile Management vs. Domain Advisor Experts**:
    - **`profile_management_notebook` (1:1 per Profile)**: Holds the user's actual personal financial records, receipts, bank statements, and family notes. Private and strictly bound to the profile.
    - **`advisor_notebook` (Domain Experts, 1:N Shared Across Profiles)**:
-     - Contains **global, theoretical, and regulatory knowledge** (e.g., *Israeli Tax Law & Capital Gains*, *Mortgage Optimization Strategist*, *Pension & Insurance Fee Benchmark Advisor*, *Index Fund Portfolio Allocation*).
+     - Contains **global, theoretical, and regulatory knowledge** (e.g., *Israeli Tax Law*, *Mortgage Optimization Strategist*, *Pension & Insurance Fee Benchmark Advisor*, *Index Fund Portfolio Allocation*).
      - Contains **NO permanent user data**.
      - When the user consults an advisor, the local app injects a **temporary, bounded scenario slice** (e.g., current mortgage tranches) as a case study for advice. The expert analyzes the case, answers queries, and general insights can be saved back into the user's private notebook.
-4. **Resilience to Partial & Incremental Data**:
+4. **Generalized Financial Events & Cost Bundling**:
+   - Like a receipt wraps a list of line items, real-world financial lifecycle events (e.g. buying a property, opening an account, remodeling) wrap a bundle of auxiliary fees, taxes, and service charges.
+   - The data model supports bundling these costs into unified **Financial Events** to compute true Total Cost of Ownership (TCO) and Capital Cost Basis.
+5. **Resilience to Partial & Incremental Data**:
    - Financial tracking is often done in stages (e.g. entering pension names today, adding policy fees weeks later).
    - All models and analytics are **null-safe**: calculations never crash or hide records because a field is missing.
    - The UI surfaces "Data Completeness" indicators to guide the user on what is missing without blocking analysis.
@@ -41,21 +44,22 @@ The architecture is built around four core principles:
         ▼                           ▼
  ┌─────────────┐             ┌─────────────┐
  │ Transaction │◄────────────┤Receipt Item │ (Itemized breakdown)
- └─────────────┘             │  (Split)    │
-                             └─────────────┘
-        │
-        ├───────────────────────────┐
-        ▼                           ▼
-┌──────────────┐            ┌──────────────┐
-│ Category     │            │ Transaction  │
-│ (Hierarchical│            │ Tags         │
-│ Tree $1 = $1)│            │ (Orthogonal) │
-└──────────────┘            └──────────────┘
-
-┌───────────────────────┐            ┌───────────────────────┐
-│ Real Estate Property  │◄── M : N ──►│    Mortgage Track     │
-│ (with Buy/Sell Taxes) │            │ (Tranche Amortization)│
-└───────────────────────┘            └───────────────────────┘
+ └──────┬──────┘             │  (Split)    │
+        │                    └─────────────┘
+        ├───────────────────────────┬───────────────────────────────────┐
+        ▼                           ▼                                   ▼
+┌──────────────┐            ┌──────────────┐                     ┌──────────────┐
+│ Category     │            │ Transaction  │                     │  Financial   │
+│ (Hierarchical│            │ Tags         │                     │  Lifecycle   │
+│ Tree $1 = $1)│            │ (Orthogonal) │                     │    Event     │
+└──────────────┘            └──────────────┘                     └──────┬───────┘
+                                                                        │
+┌───────────────────────┐            ┌───────────────────────┐          │
+│ Real Estate Property  │◄── M : N ──►│    Mortgage Track     │          ▼
+│ (with Buy/Sell Taxes) │            │ (Tranche Amortization)│  ┌──────────────┐
+└───────────────────────┘            └───────────────────────┘  │Event Expenses│
+                                                                │  (Cost Pack) │
+                                                                └──────────────┘
 ```
 
 ---
@@ -116,13 +120,14 @@ The core cashflow ledger. Handles multi-currency conversions, commissions, and t
 | `fee_amount` | Float | Default 0.0 | Bank/card conversion fee or commission (in ILS). |
 | `merchant` | String(150) | Not Null, Index | Payee or merchant name. |
 | `category_id` | Integer | FK(categories.id) | Primary hierarchical category leaf (e.g., `Car > Fuel`). |
+| `event_id` | Integer | FK(financial_events.id), Nullable | Linked lifecycle event (if part of an event cost bundle). |
 | `notes` | Text | Nullable | Statement description, OCR notes, or user remarks. |
 | `receipt_id` | Integer | FK(receipts.id), Nullable | Linked evidentiary receipt (if scanned/uploaded). |
 
 #### **The WHY & Application Usage**:
-- **Why `DateTime` instead of just `Date`?**: Preserves the chronological order of transactions that occur on the same day (e.g., morning coffee, afternoon supermarket, evening restaurant) and enables exact timestamp matching against digital receipts.
-- **Why per-transaction `exchange_rate` and `fee_amount`?**: Foreign currency transactions do not use official mid-market rates; each card company and broker adds their own markup (e.g., 2.5% FX fee or specific broker conversion rate). Storing the exact conversion rate and fee ensures the local ledger reconciles to the penny with the actual bank statement.
-- **Why `amount` is in base currency (ILS)**: Allows fast, exact aggregations (`SUM(amount)`) without doing runtime FX lookups for past dates.
+- **Why `DateTime` instead of just `Date`?**: Preserves intra-day ordering and allows exact timestamp matching against digital receipts.
+- **Why per-transaction `exchange_rate` and `fee_amount`?**: Foreign currency transactions include specific markups and fees. Storing the exact conversion rate and fee ensures the ledger reconciles to the cent with actual bank statements.
+- **Why `amount` is in base currency (ILS)**: Allows fast, exact aggregations (`SUM(amount)`) without runtime FX lookups for past dates.
 - **Used in**: Cashflow charts, monthly burn rate curves, Expenses Hub ledger, Scenario Simulator.
 
 ---
@@ -143,11 +148,8 @@ Stores digital receipt artifacts (images/PDFs) and document-level metadata.
 | `created_at` | DateTime | Default UTC | Upload timestamp. |
 
 #### **The WHY & Relationship to Transactions**:
-- **How to avoid duplication between Receipts and Transactions**:
-  - A `Receipt` is **evidence**, not a duplicate cash outflow.
-  - The bank/credit card statement has 1 line: `-₪ 450.00 at Shufersal` (`Transaction`).
-  - The `Receipt` confirms this transaction with the physical image, tax invoice number, and cashier timestamp.
-  - The relationship is 1:1 between the macro `Transaction` and the `Receipt`. Total cashflow counts ONLY the `Transaction.amount` to prevent double counting.
+- **Evidentiary Role**: A `Receipt` is proof, not a separate cashflow charge. The bank statement records the macro cashflow line (`Transaction` of -₪ 450), while the `Receipt` holds the legal invoice and image.
+- **Zero Double-Counting**: Cashflow aggregations sum *only* `transactions`.
 
 ---
 
@@ -165,15 +167,15 @@ Stores itemized SKU-level line items extracted from a receipt.
 | `confidence` | Float | Default 1.0 | OCR / LLM extraction confidence (0.0 to 1.0). |
 
 #### **The WHY & Application Usage**:
-- **Why this table is needed**: A ₪ 500 supermarket trip contains groceries, baby diapers, and household cleaning supplies. `receipt_items` allows breaking down the macro transaction into precise sub-categories without creating 30 separate bank transactions.
-- **Used in**: Receipt Vault inspection, inflation/price tracking over time for identical items, granular category analytics.
+- Allows breaking down a supermarket visit into precise sub-categories without cluttering the bank ledger with 25 separate entries.
+- Used in the Receipt Vault, price tracking over time for identical items, and itemized category reports.
 
 ---
 
 ### Table 6: `categories` & `transaction_tags` (Hierarchy & Multi-Classification)
 
-#### **1. Category Hierarchy (Strict Tree: $1 = $1)**
-To prevent double-counting in budgets, every transaction or receipt item belongs to **exactly one leaf node** in a hierarchical category tree:
+#### **1. Category Hierarchy (Strict Tree: $1 = $1 Additive Rule)**
+Every transaction or receipt item belongs to **exactly one leaf node** in a strict tree:
 
 ```
 ├── Housing
@@ -200,24 +202,78 @@ To prevent double-counting in budgets, every transaction or receipt item belongs
 | `name` | String(100) | Not Null | Category name (e.g., "Fuel", "Car", "Insurance"). |
 | `full_path` | String(255) | Index | Materialized path (e.g., `Car/Insurance`, `Housing/Insurance`). |
 
-#### **2. Orthogonal Tags (Multi-Label Facets)**
-Items often have cross-cutting dimensions that should not break the category tree:
-- A trip to the supermarket for vacation supplies: Category = `Groceries > Supermarket`, Tag = `#vacation`.
-- A doctor visit for a child: Category = `Health > Specialist`, Tag = `#kids`.
-- A business lunch: Category = `Food > Restaurants`, Tag = `#work_reimbursable`.
+#### **2. Orthogonal Tags & Hybrid Auto-Tagging Engine**
+Tags represent cross-cutting dimensions (`#vacation`, `#kids`, `#work_reimbursable`, `#renovation`).
 
 | Column | Type | Constraints | Description |
 | :--- | :--- | :--- | :--- |
 | `transaction_id` | Integer | FK(transactions.id), PK | Linked transaction. |
-| `tag` | String(50) | PK, Index | Orthogonal tag (e.g., `vacation`, `kids`, `reimbursable`). |
+| `tag` | String(50) | PK, Index | Orthogonal tag string (e.g., `vacation`, `kids`, `reimbursable`). |
+| `source` | String(20) | Default "auto" | `auto` (system/rule assigned) or `manual` (user added). |
 
-#### **The WHY & Solving Double-Counting**:
-- When calculating monthly spending or budget totals, the system groups strictly by the **Category Tree**. Because every expense has exactly one leaf category, mathematical summation is 100% additive ($1 is counted once).
-- When the user wants to see "How much did our trip to Eilat cost?", the app queries `WHERE tag = 'vacation'`, aggregating across Hotels, Fuel, Restaurants, and Attractions without interfering with the standard monthly budget.
+#### **How Auto-Tagging Works**:
+1. **Deterministic Rule Engine (Local & Instant)**:
+   - Matches merchant keywords (e.g. `El Al`, `Booking.com`, `Airbnb` → `#vacation`).
+   - Matches account types (e.g. transactions on `kids_savings` account → `#kids`).
+   - Time & Geography windows (e.g. user defines a trip date range "Aug 10–20 in Greece" → all transactions in that window auto-tagged `#vacation-greece-2026`).
+2. **NotebookLM Semantic Classification**:
+   - During receipt/document parsing, the LLM detects context (e.g. medical clinics, school supplies) and suggests appropriate tags.
+3. **Manual Control & Suppression Memory**:
+   - Tags display as removable chips in the UI with a quick `+ Add Tag` input.
+   - If a user deletes an auto-assigned tag, the system marks it as `suppressed` for that transaction, preventing auto-rules from re-applying it.
 
 ---
 
-### Table 7: `pension_policies`
+### Table 7: `financial_events` & `event_expenses` (Lifecycle Cost Bundles)
+
+Real-world financial events wrap a bundle of auxiliary fees, taxes, and service charges.
+
+```
+┌────────────────────────────────────────────────────────┐
+│           Financial Event: "Haifa Apt Purchase"         │
+├────────────────────────────────────────────────────────┤
+│ • Purchase Tax (Mas Rechisha):          ₪ 140,000      │
+│ • Real Estate Advocate / Lawyer:        ₪  18,500      │
+│ • Property Appraiser (Shamai):          ₪   2,800      │
+│ • Land Registry (Tabu / Registration):  ₪     380      │
+│ • Building Engineer Inspection:         ₪   1,750      │
+│ • Mortgage File Opening Bank Fee:       ₪     360      │
+│ • Mortgage Consultant Fee:              ₪   6,000      │
+├────────────────────────────────────────────────────────┤
+│ Total Event Ancillary Cost Pack:        ₪ 169,790      │
+└────────────────────────────────────────────────────────┘
+```
+
+#### **Table: `financial_events`**
+| Column | Type | Constraints | Description |
+| :--- | :--- | :--- | :--- |
+| `id` | Integer | PK, Auto-Inc | Unique event identifier. |
+| `profile_id` | Integer | FK(profiles.id) | Owning profile. |
+| `title` | String(150) | Not Null | Event title (e.g., "Haifa Apt Acquisition", "Opening IBKR Brokerage", "2026 Home Renovation"). |
+| `type` | String(50) | Not Null | `real_estate_buy`, `real_estate_sell`, `account_setup`, `renovation`, `life_event`, `tax_filing`. |
+| `asset_id` | Integer | Nullable | Linked asset (e.g., `real_estate_properties.id` or `accounts.id`). |
+| `date` | Date | Not Null | Event initiation / settlement date. |
+| `notes` | Text | Nullable | Contracts, official receipt references, or accountant remarks. |
+
+#### **Table: `event_expenses`**
+| Column | Type | Constraints | Description |
+| :--- | :--- | :--- | :--- |
+| `id` | Integer | PK, Auto-Inc | Unique expense identifier. |
+| `event_id` | Integer | FK(financial_events.id) | Parent financial event. |
+| `name` | String(150) | Not Null | Expense item (e.g., "Lawyer Legal Fees", "Mortgage Opening Fee", "Property Appraiser"). |
+| `recipient` | String(150) | Nullable | Payee (e.g., "Adv. David Cohen", "Land Registry / Tabu", "Shamai Milstein"). |
+| `amount` | Float | Not Null | Fee amount (₪). |
+| `category` | String(50) | Default "Legal & Fees"| Classification (`tax`, `legal`, `appraisal`, `registration`, `consulting`). |
+| `transaction_id`| Integer | FK(transactions.id), Nullable | Linked bank transaction if paid via active account. |
+| `is_capitalized`| Boolean | Default True | Whether this fee is added to the asset's tax cost basis. |
+
+#### **The WHY & Application Usage**:
+- Real estate, investments, and mortgages have significant hidden startup costs (lawyers, appraisers, notary, Tabu, mortgage consultant, file fees).
+- Tying them to an event provides true **Total Cost of Ownership (TCO)** and calculates exact **Adjusted Capital Cost Basis** for future capital gains tax minimization (Mas Shevach).
+
+---
+
+### Table 8: `pension_policies`
 Retirement funds, study funds (Keren Hishtalmut), and insurance policies.
 
 | Column | Type | Constraints | Description |
@@ -235,14 +291,12 @@ Retirement funds, study funds (Keren Hishtalmut), and insurance policies.
 | `completeness_score` | Float | Default 0.0 | Percentage of fields completed (0% - 100%). |
 | `notes` | Text | Nullable | Policy numbers, missing documents, agent remarks. |
 
-#### **The WHY & Resilience to Partial Data**:
-- **Why this structure is needed**: Users rarely have their full pension details on day 1. They might only know their provider and that they have a pension.
-- **Handling Partial Data**: All numeric fields default to 0.0. The policy is displayed immediately in the Pensions Hub with a "Missing Management Fees" badge. Net worth calculations use the known `accumulated_balance`, and the app does not fail if fee percentages are unknown.
-- **Used in**: Pensions & Insurances Hub, Fee Optimization Benchmark, Retirement Runway projection.
+#### **The WHY & Handling Partial Data**:
+- Financial data entry is incremental. Numeric fields default to `0.0`, and policies display immediately with completeness indicators (e.g., `⚠️ Missing Deposit Fee %`). Analytics operate safely without crashing.
 
 ---
 
-### Table 8: `real_estate_properties`
+### Table 9: `real_estate_properties`
 Real estate holdings with acquisition costs, ongoing yield, and tax basis.
 
 | Column | Type | Constraints | Description |
@@ -259,18 +313,9 @@ Real estate holdings with acquisition costs, ongoing yield, and tax basis.
 | `renovation_cost` | Float | Default 0.0 | Capital improvements invested (added to cost basis). |
 | `estimated_exit_tax` | Float | Default 0.0 | Estimated capital gains / betterment tax on sale (Mas Shevach / Hetel Hashbacha). |
 
-#### **The WHY & Tax Integration**:
-- Real estate returns are heavily distorted if purchase taxes (Mas Rechisha), legal fees, and renovations are ignored.
-- Storing acquisition costs calculates true **Adjusted Cost Basis**:
-  $$\text{Cost Basis} = \text{purchase\_price} + \text{purchase\_tax} + \text{acquisition\_fees} + \text{renovation\_cost}$$
-- Net equity considers outstanding mortgage debt and potential exit tax (Mas Shevach) upon sale.
-- **Used in**: Real Estate & Mortgages Hub (Net Rental Yield, LTV equity bar, liquidation scenario simulator).
-
 ---
 
-### Table 9: `mortgage_tracks` & `property_mortgage_links` (Many-to-Many Linking)
-
-A mortgage can be secured against multiple properties, and a property can have multiple mortgages (e.g. Bank Leumi 1st lien + Mezzanine loan).
+### Table 10: `mortgage_tracks` & `property_mortgage_links` (Many-to-Many Linking)
 
 #### **Table: `mortgage_tracks`**
 | Column | Type | Constraints | Description |
@@ -292,24 +337,36 @@ A mortgage can be secured against multiple properties, and a property can have m
 | `mortgage_track_id`| Integer | FK(mortgage_tracks.id), PK | Mortgage tranche. |
 | `collateral_share` | Float | Default 1.0 | Percentage of this mortgage secured by this property (0.0 to 1.0). |
 
-#### **The WHY & Bidirectional Awareness**:
-- The property knows its exact mortgage liabilities (aggregating all linked mortgage tracks).
-- The mortgage knows which physical collateral properties back it.
-- **Used in**: Property LTV calculation, Refinancing Simulator, Bank of Israel Prime shock stress-testing.
-
 ---
 
-### Table 10: `advisor_notebooks` (Domain Experts)
-Registers global advisor notebooks accessible across profiles.
+### Table 11: `advisor_notebooks` (Domain Experts Catalog)
+
+Registers specialized advisor notebooks available across profiles.
 
 | Column | Type | Constraints | Description |
 | :--- | :--- | :--- | :--- |
 | `id` | Integer | PK, Auto-Inc | Unique advisor identifier. |
 | `notebook_id` | String(100) | Unique, Not Null | Google NotebookLM Notebook ID. |
-| `title` | String(150) | Not Null | Display name (e.g., "Israeli Real Estate Tax Specialist", "Mortgage Strategist"). |
-| `domain` | String(50) | Not Null | Domain classification (`tax`, `mortgages`, `pensions`, `investments`). |
-| `description` | Text | Nullable | Overview of the advisor's theoretical knowledge and resources. |
+| `title` | String(150) | Not Null | Display name (e.g., "Israeli Mortgage Strategist"). |
+| `domain` | String(50) | Not Null | Domain classification (`mortgage`, `tax`, `pensions`, `investments`, `insurance`, `budget`, `life_events`). |
+| `description` | Text | Nullable | Advisor scope and theoretical reference resources. |
 | `is_shared` | Boolean | Default True | Accessible by all profiles. |
+
+#### **Specialized Advisor Domains Catalog**:
+1. **Mortgage & Refinancing Strategist**:
+   - Optimizes track mix (Prime vs. Kalatz vs. CPI-linked), calculates early repayment penalties (עמלת פרעון מוקדם), models Bank of Israel interest rate cycles.
+2. **Israeli Tax & Capital Gains Specialist (מומחה מיסוי ונדל״ן)**:
+   - Calculates purchase tax brackets (מדרגות מס רכישה), capital gains tax (מס שבח ורווחי הון), tax-loss harvesting (קיזוז הפסדים), study fund exemption limits.
+3. **Pensions & Retirement Optimization Advisor**:
+   - Benchmarks management fees vs. national caps, simulates pension capital at retirement, projects tax-free annuity withdrawals.
+4. **Insurances & Redundancy Auditor (ביטוחים וכפל ביטוחי)**:
+   - Identifies duplicate coverage across life, health, critical illness, and mortgage insurance; flags overpriced or unnecessary riders.
+5. **Investment & Portfolio Allocation Advisor**:
+   - Evaluates asset allocation, global index exposure, currency hedging (USD/ILS), and broker commission drag.
+6. **Household Budget & Cashflow Coach**:
+   - Detects subscription creep, analyzes seasonal expense swings, models emergency fund runways.
+7. **Major Life Events & Relocation Planner**:
+   - Models financing for home purchases, child education trusts, relocation tax rules, and estate planning.
 
 ---
 
@@ -336,10 +393,10 @@ In real personal finance, users input data incrementally. The application handle
 | Application Hub | Primary Entities | Calculated KPIs & Analytics | Partial Data Behavior |
 | :--- | :--- | :--- | :--- |
 | **Executive Overview** | `accounts`, `transactions`, `pension_policies`, `real_estate_properties`, `mortgage_tracks` | Total Net Worth, Monthly Net Cashflow, Liquid vs Illiquid assets. | Omits missing balances gracefully, displays net worth based on known assets. |
-| **Expenses Hub** | `accounts`, `transactions`, `receipts`, `receipt_items`, `categories` | Monthly burn rate, Category tree drilldown, Multi-currency FX fees, Tagged expenses. | Uncategorized items fall into "Uncategorized" bucket; multi-currency items show both native and converted ILS. |
+| **Expenses Hub** | `accounts`, `transactions`, `receipts`, `receipt_items`, `categories`, `transaction_tags` | Monthly burn rate, Category tree drilldown, Multi-currency FX fees, Tagged expenses. | Uncategorized items fall into "Uncategorized" bucket; multi-currency items show both native and converted ILS. |
 | **Savings & Investments**| `accounts` (brokerage & kids), `transactions` | Time-weighted deposits, Dynamic XIRR yield, 18-Year Compound Simulator. | XIRR computes over known cashflow dates; missing valuations prompt user. |
 | **Pensions & Insurances**| `pension_policies` | Total Retirement Equity, Fee Benchmarks vs Israeli Caps, Coverage Audit. | Displays known policies; flags missing fee percentages without crashing. |
-| **Real Estate & Mortgages**| `real_estate_properties`, `mortgage_tracks`, `property_mortgage_links` | Net Equity, Net Rental Yield, LTV Ratios, Adjusted Cost Basis (with taxes). | Calculates yield if rent and value exist; shows mortgage debt per linked tranche. |
+| **Real Estate & Mortgages**| `real_estate_properties`, `mortgage_tracks`, `property_mortgage_links`, `financial_events`, `event_expenses` | Net Equity, Net Rental Yield, LTV Ratios, Adjusted Cost Basis (with taxes & fees). | Calculates yield if rent and value exist; shows mortgage debt per linked tranche. |
 | **Receipt Vault** | `receipts`, `receipt_items`, `transactions` | Official invoice archive, Line-item SKU extraction, Confidence scoring. | Unreviewed receipts remain in "Pending Review" without affecting the master ledger. |
-| **Scenario Simulator** | `transactions`, `mortgage_tracks`, `pension_policies` | Inflation sensitivity, Bank of Israel Prime rate shocks, Emergency runway. | Simulates shocks on populated tranches; ignores tracks with missing rates. |
+| **Scenario Simulator** | `transactions`, `mortgage_tracks`, `pension_policies`, `financial_events` | Inflation sensitivity, Bank of Israel Prime rate shocks, Emergency runway. | Simulates shocks on populated tranches; ignores tracks with missing rates. |
 | **Settings & Advisors** | `profiles`, `settings`, `advisor_notebooks` | Active Profile ID, Linked Personal Notebook, Advisor Expert consultations. | Allows switching advisors and inspecting resources/artifacts dynamically. |
