@@ -36,6 +36,8 @@
   - Download relevant artifacts (data tables, custom reports) and add them as queryable sources in the notebook if deeper retrieval is needed.
 - [ ] **Conflict Resolution UI for Pre-Existing Profiles**:
   - Display side-by-side diff table for conflicting records when running retro-scan on a profile with existing records.
+- [ ] **Statutory Portal Export Parsers (Har HaBituach & Mislaka)**:
+  - Add one-click PDF dropzone for official summary reports exported from Har HaBituach, Har HaKesef, and the Pension Clearinghouse, prompting NotebookLM to extract all discovered policies, fees, and account numbers into the profile database.
 
 ## 4. Financial Lifecycle Events & Cost Bundling (`financial_events`)
 - [ ] **Generalized Event Expense Bundles**:

@@ -386,6 +386,14 @@ In real personal finance, users input data incrementally. The application handle
      > *"We currently have a pension record for Menora with balance ₪ 450,000, but missing management fees. From this new document, can you find and extract the missing deposit fee and accumulation fee?"*
    - NotebookLM returns the missing fields to patch the existing record without duplicating it.
 
+4. **Statutory Discovery Gateways (Official Israeli Portals)**:
+   - To assist users in discovering forgotten or dormant financial assets, the application directly links to official government registries:
+     - **Har HaKesef (הר הכסף)** (`https://itur.mof.gov.il/`): Dormant bank accounts, forgotten pension pots, provident funds (*קופות גמל*).
+     - **Har HaBituach (הר הביטוח)** (`https://harb.cma.gov.il/`): Centralized list of active and inactive insurance policies registered under the citizen's ID.
+     - **The Pension Clearinghouse (המסלקה הפנסיונית)** (`https://www.swiftness.co.il/`): Statutory database for complete retirement statements and ongoing management fees.
+     - **Bank of Israel Credit Data (מערכת נתוני אשראי)** (`https://www.creditdata.org.il/`): Official credit report listing all open loans, bank facilities, and mortgages.
+   - The UI provides immediate manual entry modals alongside these links so users can seamlessly transfer discovered assets into the profile ledger.
+
 ---
 
 ## 5. Summary Table: Application Views vs. Schema Entities
