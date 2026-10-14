@@ -6,15 +6,19 @@ import {
 import { RefreshCw, FolderPlus, CreditCard, Wallet, TrendingUp } from 'lucide-react';
 import axios from 'axios';
 
-const API_BASE = 'http://127.0.0.1:8900';
+const API_BASE = 'http://127.0.0.1:8910';
 
 export default function DashboardView({ fxRate, activeProfileId, activeProfileName }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (!activeProfileId) return;
+    setData(null);
     setLoading(true);
-    axios.get(`${API_BASE}/api/dashboard/overview`)
+    axios.get(`${API_BASE}/api/dashboard/overview`, {
+      headers: { 'X-Profile-Id': activeProfileId }
+    })
       .then(res => setData(res.data))
       .catch(() => setData(null))
       .finally(() => setLoading(false));
@@ -42,7 +46,7 @@ export default function DashboardView({ fxRate, activeProfileId, activeProfileNa
     return null;
   };
 
-  const isCleanSlate = (data?.total_net_worth === 0 && expenseCuts.length === 0);
+  const isCleanSlate = (!loading && data && data.total_net_worth === 0 && expenseCuts.length === 0);
 
   return (
     <div style={{ padding: '2rem', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>

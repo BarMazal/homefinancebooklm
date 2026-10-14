@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete
 from typing import List, Dict, Any
@@ -8,25 +8,25 @@ import os
 from app.database import get_db
 from app.models import Setting, Transaction, Account, Receipt, PensionPolicy, MortgageTrack
 from app.schemas import SettingUpdate
-from app.services.profile_manager import profile_manager
+from app.services.profile_manager import profile_manager, get_request_profile_id
 
 router = APIRouter(prefix="/api/settings", tags=["Settings"])
 
 @router.get("", response_model=Dict[str, Any])
-async def get_settings():
+async def get_settings(request: Request):
     """
     Returns the per-profile settings configuration (UI theme, chart type, dashboard cards, NotebookLM settings).
     """
-    active_profile_id = profile_manager.get_active_profile_id()
+    active_profile_id = get_request_profile_id(request)
     settings = profile_manager.load_profile_settings(active_profile_id)
     return settings
 
 @router.post("")
-async def update_setting(setting: SettingUpdate):
+async def update_setting(request: Request, setting: SettingUpdate):
     """
     Updates a key-value setting for the active profile, including NotebookLM notebook ID validation.
     """
-    active_profile_id = profile_manager.get_active_profile_id()
+    active_profile_id = get_request_profile_id(request)
     settings = profile_manager.load_profile_settings(active_profile_id)
 
     # Check NotebookLM Notebook ID sharing across profiles
@@ -45,11 +45,11 @@ async def update_setting(setting: SettingUpdate):
     }
 
 @router.post("/full")
-async def update_full_profile_settings(new_settings: Dict[str, Any]):
+async def update_full_profile_settings(request: Request, new_settings: Dict[str, Any]):
     """
     Saves full JSON configuration object for the active profile (UI theme, cards, etc.).
     """
-    active_profile_id = profile_manager.get_active_profile_id()
+    active_profile_id = get_request_profile_id(request)
     
     # Check notebook sharing if provided
     sharing_warning = None
@@ -62,8 +62,8 @@ async def update_full_profile_settings(new_settings: Dict[str, Any]):
     return {"status": "success", "settings": new_settings, "sharing_warning": sharing_warning}
 
 @router.get("/database/export")
-async def export_database(db: AsyncSession = Depends(get_db)):
-    active_profile_id = profile_manager.get_active_profile_id()
+async def export_database(request: Request, db: AsyncSession = Depends(get_db)):
+    active_profile_id = get_request_profile_id(request)
     accounts = (await db.execute(select(Account))).scalars().all()
     transactions = (await db.execute(select(Transaction))).scalars().all()
     receipts = (await db.execute(select(Receipt))).scalars().all()
@@ -83,14 +83,14 @@ async def export_database(db: AsyncSession = Depends(get_db)):
     return export_data
 
 @router.post("/database/import")
-async def import_database(file: UploadFile = File(...), db: AsyncSession = Depends(get_db)):
+async def import_database(request: Request, file: UploadFile = File(...), db: AsyncSession = Depends(get_db)):
     contents = await file.read()
     try:
         data = json.loads(contents)
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid JSON file format.")
 
-    active_profile_id = profile_manager.get_active_profile_id()
+    active_profile_id = get_request_profile_id(request)
 
     if "settings" in data:
         profile_manager.save_profile_settings(active_profile_id, data["settings"])
@@ -115,3 +115,4 @@ async def clear_database(db: AsyncSession = Depends(get_db)):
     await db.execute(delete(MortgageTrack))
     await db.commit()
     return {"status": "success", "message": "Active profile database completely reset."}
+

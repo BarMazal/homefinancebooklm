@@ -3,7 +3,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 
-from app.database import init_db
+from app.database import init_db, init_all_profiles
 from app.routes import (
     accounts,
     transactions,
@@ -20,9 +20,9 @@ from app.routes import (
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup: initialize database tables
-    await init_db()
-    print("[Home Finance BookLM Backend] Database initialized successfully.")
+    # Startup: initialize database tables for all profiles
+    await init_all_profiles()
+    print("[Home Finance BookLM Backend] Database initialized successfully for all profiles.")
     yield
     # Shutdown
     print("[Home Finance BookLM Backend] Shutting down cleanly.")
@@ -58,4 +58,4 @@ app.include_router(notebooklm.router)
 
 @app.get("/api/health")
 async def health_check():
-    return {"status": "ok", "app": "Home Finance BookLM", "version": "1.0.0"}
+    return {"status": "ok", "app": "Home Finance BookLM", "version": "1.0.1"}

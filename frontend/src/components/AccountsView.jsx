@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Wallet, Upload, Plus, FileSpreadsheet, Building2, CreditCard } from 'lucide-react';
 import axios from 'axios';
 
-const API_BASE = 'http://127.0.0.1:8900';
+const API_BASE = 'http://127.0.0.1:8910';
 
 export default function AccountsView({ activeProfileId }) {
   const [accounts, setAccounts] = useState([]);
@@ -10,7 +10,12 @@ export default function AccountsView({ activeProfileId }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    axios.get(`${API_BASE}/api/accounts`)
+    if (!activeProfileId) return;
+    setAccounts([]);
+    setLoading(true);
+    axios.get(`${API_BASE}/api/accounts`, {
+      headers: { 'X-Profile-Id': activeProfileId }
+    })
       .then(res => {
         setAccounts(res.data || []);
         if (res.data && res.data.length > 0) {

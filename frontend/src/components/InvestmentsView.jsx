@@ -3,7 +3,7 @@ import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 import { TrendingUp, RefreshCw, HelpCircle, CheckCircle2, Building2 } from 'lucide-react';
 import axios from 'axios';
 
-const API_BASE = 'http://127.0.0.1:8900';
+const API_BASE = 'http://127.0.0.1:8910';
 
 export default function InvestmentsView({ fxRate, activeProfileId }) {
   const [kidsDeposit, setKidsDeposit] = useState(1000);
@@ -12,8 +12,12 @@ export default function InvestmentsView({ fxRate, activeProfileId }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (!activeProfileId) return;
+    setSummary(null);
     setLoading(true);
-    axios.get(`${API_BASE}/api/xirr/portfolio-summary`)
+    axios.get(`${API_BASE}/api/xirr/portfolio-summary`, {
+      headers: { 'X-Profile-Id': activeProfileId }
+    })
       .then(res => setSummary(res.data))
       .catch(() => setSummary(null))
       .finally(() => setLoading(false));

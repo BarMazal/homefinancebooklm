@@ -1,3 +1,4 @@
+import os
 from fastapi import APIRouter, HTTPException
 from typing import List, Dict, Any
 from pydantic import BaseModel
@@ -20,6 +21,17 @@ async def list_profiles():
     data = profile_manager.get_profiles_data()
     return data.get("profiles", [])
 
+@router.get("/active", response_model=ProfileResponse)
+async def get_active_profile():
+    data = profile_manager.get_profiles_data()
+    active_id = data.get("active_profile_id", 1)
+    profiles = data.get("profiles", [])
+    for p_item in profiles:
+        if p_item["id"] == active_id:
+            return p_item
+    return profiles[0] if profiles else {"id": 1, "name": "Demo Profile (Sample Data)", "is_active": True}
+
+
 @router.post("", response_model=ProfileResponse)
 async def create_profile(p: ProfileBase):
     data = profile_manager.get_profiles_data()
@@ -40,7 +52,9 @@ async def create_profile(p: ProfileBase):
 @router.post("/{profile_id}/activate", response_model=ProfileResponse)
 async def activate_profile(profile_id: int):
     profile_manager.set_active_profile_id(profile_id)
-    await init_db(profile_id)
+    db_path = profile_manager.get_profile_db_path(profile_id)
+    if not os.path.exists(db_path):
+        await init_db(profile_id)
 
     data = profile_manager.get_profiles_data()
     for p_item in data.get("profiles", []):

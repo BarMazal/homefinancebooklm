@@ -1,3 +1,4 @@
+import time
 from datetime import date
 from typing import List
 import pyxirr
@@ -6,21 +7,32 @@ import httpx
 # Static / fallback FX rate if API fails
 DEFAULT_USD_ILS_RATE = 3.65
 
+_cached_fx_rate = DEFAULT_USD_ILS_RATE
+_cached_fx_timestamp = 0.0
+
 async def fetch_usd_ils_rate() -> float:
     """
-    Fetch live / recent USD to ILS exchange rate from free API or fallback.
+    Fetch live / recent USD to ILS exchange rate, cached in-memory for 1 hour
+    to keep dashboard and profile switching instantaneous.
     """
+    global _cached_fx_rate, _cached_fx_timestamp
+    now = time.time()
+    if _cached_fx_timestamp and (now - _cached_fx_timestamp < 3600):
+        return _cached_fx_rate
+
     url = "https://open.er-api.com/v6/latest/USD"
     try:
-        async with httpx.AsyncClient(timeout=5.0) as client:
+        async with httpx.AsyncClient(timeout=3.0) as client:
             resp = await client.get(url)
             if resp.status_code == 200:
                 data = resp.json()
                 rate = data.get("rates", {}).get("ILS", DEFAULT_USD_ILS_RATE)
-                return float(rate)
+                _cached_fx_rate = float(rate)
+                _cached_fx_timestamp = now
+                return _cached_fx_rate
     except Exception as e:
         print(f"[FX Rate Fetch Error]: {e}")
-    return DEFAULT_USD_ILS_RATE
+    return _cached_fx_rate
 
 def calculate_portfolio_xirr(dates: List[date], amounts: List[float]) -> float:
     """

@@ -4,21 +4,27 @@ Write-Host "===================================================" -ForegroundColo
 Write-Host "  Starting Home Finance BookLM Application" -ForegroundColor Cyan
 Write-Host "===================================================" -ForegroundColor Cyan
 
-$backendPort = 8900
+$backendPort = 8910
 $frontendPort = 5190
 
-# Stop any existing processes on ports 8900 and 5190
-$portBackend = Get-NetTCPConnection -LocalPort $backendPort -ErrorAction SilentlyContinue
-if ($portBackend) {
-    Write-Host "[!] Stopping existing process on port $backendPort..." -ForegroundColor Yellow
-    Stop-Process -Id $portBackend.OwningProcess -Force -ErrorAction SilentlyContinue
+function Stop-PortProcesses($port) {
+    $connections = Get-NetTCPConnection -LocalPort $port -ErrorAction SilentlyContinue
+    if ($connections) {
+        $pids = $connections | Select-Object -ExpandProperty OwningProcess -Unique
+        foreach ($pidToKill in $pids) {
+            if ($pidToKill -and $pidToKill -gt 0) {
+                Write-Host "[!] Stopping process $pidToKill on port $port..." -ForegroundColor Yellow
+                Stop-Process -Id $pidToKill -Force -ErrorAction SilentlyContinue
+                cmd.exe /c "taskkill /F /T /PID $pidToKill" >$null 2>&1
+            }
+        }
+    }
 }
 
-$portFrontend = Get-NetTCPConnection -LocalPort $frontendPort -ErrorAction SilentlyContinue
-if ($portFrontend) {
-    Write-Host "[!] Stopping existing process on port $frontendPort..." -ForegroundColor Yellow
-    Stop-Process -Id $portFrontend.OwningProcess -Force -ErrorAction SilentlyContinue
-}
+# Stop any existing processes on ports 8910 and 5190
+Stop-PortProcesses $backendPort
+Stop-PortProcesses $frontendPort
+Start-Sleep -Milliseconds 600
 
 Write-Host "[+] Starting FastAPI Backend Server on http://127.0.0.1:$backendPort ..." -ForegroundColor Green
 $backendProcess = Start-Process -FilePath "cmd.exe" -ArgumentList "/c venv\Scripts\activate.bat && uvicorn app.main:app --port $backendPort --reload" -WorkingDirectory (Get-Location).Path -WindowStyle Hidden -PassThru
@@ -34,6 +40,7 @@ Start-Process "http://localhost:$frontendPort"
 Write-Host "===================================================" -ForegroundColor Cyan
 Write-Host "  Application Running!" -ForegroundColor Green
 Write-Host "  Dashboard UI: http://localhost:$frontendPort (Opened in browser)" -ForegroundColor Yellow
+Write-Host "  API Docs:     http://127.0.0.1:$backendPort/docs" -ForegroundColor Cyan
 Write-Host "  Press CTRL+C anytime in this window to stop both servers cleanly." -ForegroundColor Magenta
 Write-Host "===================================================" -ForegroundColor Cyan
 
@@ -50,10 +57,7 @@ finally {
     if ($frontendProcess -and -not $frontendProcess.HasExited) {
         Stop-Process -Id $frontendProcess.Id -Force -ErrorAction SilentlyContinue
     }
-    # Clean up listening ports
-    $p1 = Get-NetTCPConnection -LocalPort $backendPort -ErrorAction SilentlyContinue
-    if ($p1) { Stop-Process -Id $p1.OwningProcess -Force -ErrorAction SilentlyContinue }
-    $p2 = Get-NetTCPConnection -LocalPort $frontendPort -ErrorAction SilentlyContinue
-    if ($p2) { Stop-Process -Id $p2.OwningProcess -Force -ErrorAction SilentlyContinue }
+    Stop-PortProcesses $backendPort
+    Stop-PortProcesses $frontendPort
     Write-Host "[+] All servers stopped cleanly." -ForegroundColor Green
 }

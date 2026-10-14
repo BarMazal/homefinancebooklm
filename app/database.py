@@ -3,7 +3,8 @@ from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sess
 from sqlalchemy.orm import declarative_base
 from sqlalchemy import select
 from datetime import date, datetime
-from app.services.profile_manager import profile_manager
+from fastapi import Request
+from app.services.profile_manager import profile_manager, get_request_profile_id
 
 Base = declarative_base()
 
@@ -20,8 +21,8 @@ def get_engine_for_profile(profile_id: int):
         _sessionmakers[profile_id] = sm
     return _engines[profile_id], _sessionmakers[profile_id]
 
-async def get_db():
-    active_profile_id = profile_manager.get_active_profile_id()
+async def get_db(request: Request = None):
+    active_profile_id = get_request_profile_id(request)
     _, sessionmaker = get_engine_for_profile(active_profile_id)
     async with sessionmaker() as session:
         try:
@@ -147,6 +148,13 @@ async def init_db(profile_id: int = None):
     engine, sessionmaker = get_engine_for_profile(profile_id)
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        def migrate_tags_column(sync_conn):
+            from sqlalchemy import text
+            res = sync_conn.execute(text("PRAGMA table_info(transactions);"))
+            cols = [row[1] for row in res.fetchall()]
+            if cols and "tags" not in cols:
+                sync_conn.execute(text("ALTER TABLE transactions ADD COLUMN tags JSON;"))
+        await conn.run_sync(migrate_tags_column)
 
     # Seed demo data ONLY for Profile 1 (Demo Profile) if empty
     if profile_id == 1:
@@ -155,3 +163,13 @@ async def init_db(profile_id: int = None):
             acc_res = await session.execute(select(Account))
             if not acc_res.scalars().first():
                 await seed_demo_profile_data(session)
+
+async def init_all_profiles():
+    data = profile_manager.get_profiles_data()
+    profiles = data.get("profiles", [])
+    # Always ensure Profile 1 (Demo Profile) is initialized and seeded
+    await init_db(1)
+    for p in profiles:
+        p_id = p.get("id")
+        if p_id and p_id != 1:
+            await init_db(p_id)

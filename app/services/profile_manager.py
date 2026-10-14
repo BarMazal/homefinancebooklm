@@ -2,6 +2,8 @@ import os
 import json
 from typing import Dict, Any, List
 
+from fastapi import Request
+
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
 DATA_DIR = os.path.join(BASE_DIR, "data")
 PROFILES_FILE = os.path.join(DATA_DIR, "profiles.json")
@@ -121,3 +123,15 @@ class ProfileManager:
         return {"is_shared": False}
 
 profile_manager = ProfileManager()
+
+def get_request_profile_id(request: Request = None) -> int:
+    if request is not None:
+        header_val = request.headers.get("x-profile-id") or request.headers.get("X-Profile-Id")
+        if header_val:
+            try:
+                val = int(header_val)
+                if val > 0:
+                    return val
+            except ValueError:
+                pass
+    return profile_manager.get_active_profile_id()

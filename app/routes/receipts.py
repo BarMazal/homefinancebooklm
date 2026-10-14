@@ -1,6 +1,6 @@
 import os
 import shutil
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from typing import List
@@ -11,13 +11,13 @@ from app.models import Receipt, Transaction, Account
 from app.schemas import ReceiptResponse, ReceiptConfirm
 from app.services.ocr_service import process_receipt_ocr
 
-from app.services.profile_manager import profile_manager
+from app.services.profile_manager import profile_manager, get_request_profile_id
 
 router = APIRouter(prefix="/api/receipts", tags=["Receipts"])
 
 @router.post("/upload", response_model=ReceiptResponse)
-async def upload_receipt(file: UploadFile = File(...), db: AsyncSession = Depends(get_db)):
-    active_profile_id = profile_manager.get_active_profile_id()
+async def upload_receipt(request: Request, file: UploadFile = File(...), db: AsyncSession = Depends(get_db)):
+    active_profile_id = get_request_profile_id(request)
     profile_dir = profile_manager.get_profile_dir(active_profile_id)
     upload_dir = os.path.join(profile_dir, "uploads")
     os.makedirs(upload_dir, exist_ok=True)

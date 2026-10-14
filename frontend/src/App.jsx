@@ -12,7 +12,38 @@ import ReceiptsView from './components/ReceiptsView';
 import SettingsView from './components/SettingsView';
 import { AlertTriangle, RefreshCw, CheckCircle2 } from 'lucide-react';
 
-const API_BASE = 'http://127.0.0.1:8900';
+const API_BASE = 'http://127.0.0.1:8910';
+
+const STORAGE_PROFILES_KEY = 'hf_profiles_list';
+const STORAGE_ACTIVE_PROFILE_KEY = 'hf_active_profile';
+
+const getStoredProfiles = () => {
+  try {
+    const raw = localStorage.getItem(STORAGE_PROFILES_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    }
+  } catch (e) {}
+  return [
+    { id: 1, name: 'Demo Profile (Sample Data)', is_active: true },
+    { id: 2, name: 'Personal Household (Clean Slate)', is_active: false }
+  ];
+};
+
+const getStoredActiveProfile = (initialProfiles) => {
+  try {
+    const raw = localStorage.getItem(STORAGE_ACTIVE_PROFILE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed && parsed.id) {
+        const found = initialProfiles.find(p => p.id === parsed.id);
+        return found || parsed;
+      }
+    }
+  } catch (e) {}
+  return initialProfiles.find(p => p.is_active) || initialProfiles[0];
+};
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('overview');
@@ -21,53 +52,113 @@ export default function App() {
   const [retroPreviewActive, setRetroPreviewActive] = useState(false);
   const [retroData, setRetroData] = useState(null);
 
-  // Profiles State
-  const [profiles, setProfiles] = useState([
-    { id: 1, name: 'Demo Profile (Sample Data)', is_active: true },
-    { id: 2, name: 'Personal Household (Clean Slate)', is_active: false }
-  ]);
-  const [activeProfile, setActiveProfile] = useState({ id: 1, name: 'Demo Profile (Sample Data)' });
+  // Profiles State with LocalStorage Persistence
+  const [profiles, setProfiles] = useState(getStoredProfiles);
+  const [activeProfile, setActiveProfile] = useState(() => {
+    const p = getStoredProfiles();
+    return getStoredActiveProfile(p);
+  });
+
+  // Ensure default axios header carries active profile immediately on render
+  if (activeProfile?.id) {
+    axios.defaults.headers.common['X-Profile-Id'] = activeProfile.id;
+  }
 
   useEffect(() => {
-    // Fetch live USD/ILS rate from FastAPI backend
+    if (activeProfile?.id) {
+      axios.defaults.headers.common['X-Profile-Id'] = activeProfile.id;
+      localStorage.setItem(STORAGE_ACTIVE_PROFILE_KEY, JSON.stringify(activeProfile));
+    }
+  }, [activeProfile]);
+
+  useEffect(() => {
+    // 1. Fetch live USD/ILS rate from FastAPI backend
     axios.get(`${API_BASE}/api/xirr/fx-rate`)
       .then(res => setFxRate(res.data.rate))
       .catch(() => setFxRate(3.65));
 
-    // Check NotebookLM chromium status
+    // 2. Fetch Profiles from server immediately to align state
+    axios.get(`${API_BASE}/api/profiles`)
+      .then(res => {
+        const serverProfiles = res.data;
+        if (serverProfiles && serverProfiles.length > 0) {
+          setProfiles(serverProfiles);
+          localStorage.setItem(STORAGE_PROFILES_KEY, JSON.stringify(serverProfiles));
+
+          // Resolve active profile:
+          let target = null;
+          try {
+            const savedRaw = localStorage.getItem(STORAGE_ACTIVE_PROFILE_KEY);
+            if (savedRaw) {
+              const savedObj = JSON.parse(savedRaw);
+              target = serverProfiles.find(p => p.id === savedObj.id);
+            }
+          } catch (e) {}
+
+          // Fallback to server active profile if not set or found in list
+          if (!target) {
+            target = serverProfiles.find(p => p.is_active) || serverProfiles[0];
+          }
+
+          setActiveProfile(target);
+          localStorage.setItem(STORAGE_ACTIVE_PROFILE_KEY, JSON.stringify(target));
+          axios.defaults.headers.common['X-Profile-Id'] = target.id;
+
+          // If local choice differs from backend active profile, align backend
+          if (!target.is_active) {
+            axios.post(`${API_BASE}/api/profiles/${target.id}/activate`).catch(() => {});
+          }
+        }
+      })
+      .catch(err => console.error('Failed to load profiles:', err));
+
+    // 3. Check NotebookLM status
     axios.get(`${API_BASE}/api/notebooklm/status`)
       .then(res => setNotebookLmConnected(res.data.authenticated))
       .catch(() => setNotebookLmConnected(true));
-
-    // Fetch Profiles
-    axios.get(`${API_BASE}/api/profiles`)
-      .then(res => {
-        setProfiles(res.data);
-        const active = res.data.find(p => p.is_active) || res.data[0];
-        setActiveProfile(active);
-      })
-      .catch(() => {});
   }, []);
 
-  const handleSwitchProfile = async (profileId) => {
-    const target = profiles.find(p => p.id === profileId);
-    if (!target) return;
+  const handleSwitchProfile = (profileId) => {
     try {
-      await axios.post(`${API_BASE}/api/profiles/${profileId}/activate`);
+      const target = profiles.find(p => p.id === profileId) || { id: profileId, name: `Profile #${profileId}` };
+      // 1. Instantly update activeProfile, localStorage, and axios header
       setActiveProfile(target);
+      localStorage.setItem(STORAGE_ACTIVE_PROFILE_KEY, JSON.stringify(target));
+      axios.defaults.headers.common['X-Profile-Id'] = target.id;
+
+      // 2. Instantly update profiles list with is_active flag in state & localStorage
+      const updatedProfiles = profiles.map(p => ({
+        ...p,
+        is_active: p.id === profileId
+      }));
+      setProfiles(updatedProfiles);
+      localStorage.setItem(STORAGE_PROFILES_KEY, JSON.stringify(updatedProfiles));
+
+      // 3. Fire backend activation in background (non-blocking)
+      axios.post(`${API_BASE}/api/profiles/${profileId}/activate`).catch(err => {
+        console.error('Failed to activate profile on backend:', err);
+      });
     } catch (err) {
-      console.error(err);
-      setActiveProfile(target);
+      console.error('Failed to switch profile:', err);
     }
   };
 
-  const handleCreateProfile = (name) => {
-    axios.post(`${API_BASE}/api/profiles`, { name })
-      .then(res => {
-        setProfiles(prev => [...prev, res.data]);
-        handleSwitchProfile(res.data.id);
-      })
-      .catch(() => {});
+  const handleCreateProfile = async (name) => {
+    try {
+      const res = await axios.post(`${API_BASE}/api/profiles`, { name });
+      const newProfile = res.data;
+      await axios.post(`${API_BASE}/api/profiles/${newProfile.id}/activate`);
+      const listRes = await axios.get(`${API_BASE}/api/profiles`);
+      setProfiles(listRes.data);
+      localStorage.setItem(STORAGE_PROFILES_KEY, JSON.stringify(listRes.data));
+      const active = listRes.data.find(p => p.id === newProfile.id) || newProfile;
+      setActiveProfile(active);
+      localStorage.setItem(STORAGE_ACTIVE_PROFILE_KEY, JSON.stringify(active));
+      axios.defaults.headers.common['X-Profile-Id'] = active.id;
+    } catch (err) {
+      console.error('Failed to create profile:', err);
+      alert('Failed to create profile: ' + (err.response?.data?.detail || err.message));
+    }
   };
 
   const renderActiveView = () => {

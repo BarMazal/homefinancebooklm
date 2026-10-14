@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { 
   BarChart3, 
   CreditCard, 
@@ -7,11 +7,13 @@ import {
   Building, 
   Clock, 
   Sliders, 
-  Settings,
-  Bot,
-  User,
-  Receipt,
-  Plus
+  Settings, 
+  Bot, 
+  User, 
+  Receipt, 
+  Plus,
+  Check,
+  X
 } from 'lucide-react';
 
 export default function Navigation({ 
@@ -20,8 +22,20 @@ export default function Navigation({
   notebookLmConnected,
   profiles,
   activeProfile,
-  onSwitchProfile
+  onSwitchProfile,
+  onCreateProfile
 }) {
+  const [isCreatingProfile, setIsCreatingProfile] = useState(false);
+  const [newProfileName, setNewProfileName] = useState('');
+
+  const handleSaveProfile = () => {
+    if (newProfileName.trim()) {
+      onCreateProfile(newProfileName.trim());
+      setNewProfileName('');
+      setIsCreatingProfile(false);
+    }
+  };
+
   const categoryHubs = [
     { id: 'overview', label: 'Executive Overview', icon: BarChart3 },
     { id: 'expenses', label: 'Expenses Hub', icon: CreditCard },
@@ -95,37 +109,109 @@ export default function Navigation({
               marginBottom: '0.5rem'
             }}
           >
-            {profiles.map(p => (
-              <option key={p.id} value={p.id}>
-                {p.name}
-              </option>
-            ))}
+            {profiles && profiles.length > 0 ? (
+              profiles.map(p => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))
+            ) : (
+              activeProfile && (
+                <option value={activeProfile.id}>
+                  {activeProfile.name}
+                </option>
+              )
+            )}
           </select>
-          <button
-            onClick={() => {
-              const name = prompt('Enter name for new profile (e.g., Business, Taxes, Family):');
-              if (name && name.trim()) {
-                onCreateProfile(name.trim());
-              }
-            }}
-            style={{
-              width: '100%',
-              padding: '0.35rem',
-              borderRadius: '6px',
-              background: 'rgba(99, 102, 241, 0.2)',
-              border: '1px dashed rgba(99, 102, 241, 0.5)',
-              color: '#818cf8',
-              fontSize: '0.75rem',
-              fontWeight: 600,
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '0.35rem'
-            }}
-          >
-            <Plus size={14} /> Add New Profile
-          </button>
+          {isCreatingProfile ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+              <input
+                type="text"
+                autoFocus
+                placeholder="e.g. Household 2026"
+                value={newProfileName}
+                onChange={(e) => setNewProfileName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') handleSaveProfile();
+                  if (e.key === 'Escape') {
+                    setIsCreatingProfile(false);
+                    setNewProfileName('');
+                  }
+                }}
+                style={{
+                  width: '100%',
+                  padding: '0.4rem 0.5rem',
+                  borderRadius: '6px',
+                  background: '#0f172a',
+                  border: '1px solid #6366f1',
+                  color: 'white',
+                  fontSize: '0.75rem',
+                  outline: 'none',
+                  boxSizing: 'border-box'
+                }}
+              />
+              <div style={{ display: 'flex', gap: '0.35rem' }}>
+                <button
+                  onClick={handleSaveProfile}
+                  style={{
+                    flex: 1,
+                    padding: '0.3rem',
+                    borderRadius: '5px',
+                    background: '#6366f1',
+                    border: 'none',
+                    color: 'white',
+                    fontSize: '0.75rem',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '0.25rem'
+                  }}
+                >
+                  <Check size={12} /> Create
+                </button>
+                <button
+                  onClick={() => {
+                    setIsCreatingProfile(false);
+                    setNewProfileName('');
+                  }}
+                  style={{
+                    padding: '0.3rem 0.5rem',
+                    borderRadius: '5px',
+                    background: 'rgba(255,255,255,0.1)',
+                    border: 'none',
+                    color: '#94a3b8',
+                    fontSize: '0.75rem',
+                    cursor: 'pointer'
+                  }}
+                >
+                  <X size={12} />
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button
+              onClick={() => setIsCreatingProfile(true)}
+              style={{
+                width: '100%',
+                padding: '0.35rem',
+                borderRadius: '6px',
+                background: 'rgba(99, 102, 241, 0.2)',
+                border: '1px dashed rgba(99, 102, 241, 0.5)',
+                color: '#818cf8',
+                fontSize: '0.75rem',
+                fontWeight: 600,
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '0.35rem'
+              }}
+            >
+              <Plus size={14} /> Add New Profile
+            </button>
+          )}
         </div>
 
         {/* Category Hubs Section */}

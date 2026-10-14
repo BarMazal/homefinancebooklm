@@ -42,6 +42,7 @@ class Transaction(Base):
     merchant = Column(String, index=True)
     cluster = Column(String, default="Uncategorized") # Groceries, Housing, Utilities, Subscriptions, Entertainment, Kids, Insurance, Salary, Investment
     notes = Column(Text, nullable=True)
+    tags = Column(JSON, default=list)
     receipt_id = Column(Integer, ForeignKey("receipts.id"), nullable=True)
 
     account = relationship("Account", back_populates="transactions")

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Upload, CheckCircle2, AlertCircle, FileText, Trash2, Eye, ShieldAlert } from 'lucide-react';
 import axios from 'axios';
 
-const API_BASE = 'http://127.0.0.1:8900';
+const API_BASE = 'http://127.0.0.1:8910';
 
 export default function ReceiptsView({ activeProfileId }) {
   const [file, setFile] = useState(null);
@@ -20,8 +20,11 @@ export default function ReceiptsView({ activeProfileId }) {
   });
 
   useEffect(() => {
+    if (!activeProfileId) return;
     setLoading(true);
-    axios.get(`${API_BASE}/api/receipts?status=pending_review`)
+    axios.get(`${API_BASE}/api/receipts?status=pending_review`, {
+      headers: { 'X-Profile-Id': activeProfileId }
+    })
       .then(res => setPendingReceipts(res.data || []))
       .catch(() => setPendingReceipts([]))
       .finally(() => setLoading(false));
@@ -227,17 +230,25 @@ export default function ReceiptsView({ activeProfileId }) {
                 <label style={{ fontSize: '0.85rem', color: '#94a3b8', display: 'block', marginBottom: '0.35rem' }}>
                   Assign Cluster / Category
                 </label>
-                <select
+                <input
+                  list="receipt-categories-list"
                   value={editForm.category}
                   onChange={(e) => setEditForm({...editForm, category: e.target.value})}
+                  placeholder="Select or enter custom category..."
                   style={{ width: '100%', padding: '0.6rem', borderRadius: '8px', background: '#1e293b', border: '1px solid rgba(255,255,255,0.1)', color: 'white' }}
-                >
-                  <option value="Groceries">Groceries & Supermarket</option>
-                  <option value="Housing">Housing & Utilities</option>
-                  <option value="Kids">Kids & Education</option>
-                  <option value="Transport">Car & Transport</option>
-                  <option value="Entertainment">Dining & Entertainment</option>
-                </select>
+                />
+                <datalist id="receipt-categories-list">
+                  <option value="Groceries" />
+                  <option value="Housing & Utilities" />
+                  <option value="Insurance & Pension" />
+                  <option value="Car & Transport" />
+                  <option value="Dining & Entertainment" />
+                  <option value="Subscriptions & Telecom" />
+                  <option value="Health & Pharma" />
+                  <option value="Kids & Education" />
+                  <option value="Income" />
+                  <option value="Other Expenses" />
+                </datalist>
               </div>
             </div>
 

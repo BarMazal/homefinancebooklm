@@ -12,6 +12,6 @@ frontend/dist/
 
 # Application local data & auth profiles
 data/
-.chromium_profile/
+.chromium_profile*/
 *.db
 *.log

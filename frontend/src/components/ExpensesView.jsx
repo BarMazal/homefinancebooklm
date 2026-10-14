@@ -5,7 +5,7 @@ import {
 import { CreditCard, Upload, Eye, CheckCircle2, FileSpreadsheet, ChevronRight, RotateCcw, AlertTriangle, Plus } from 'lucide-react';
 import axios from 'axios';
 
-const API_BASE = 'http://127.0.0.1:8900';
+const API_BASE = 'http://127.0.0.1:8910';
 
 export default function ExpensesView({ activeProfileId }) {
   const [breadcrumbs, setBreadcrumbs] = useState(['All']);
@@ -24,8 +24,13 @@ export default function ExpensesView({ activeProfileId }) {
   });
 
   useEffect(() => {
+    if (!activeProfileId) return;
+    setClusterData([]);
+    setPendingReceipts([]);
+    setLoading(true);
+    const reqHeaders = { 'X-Profile-Id': activeProfileId };
     // Fetch live expenses summary from DB
-    axios.get(`${API_BASE}/api/transactions/summary/by-cluster`)
+    axios.get(`${API_BASE}/api/transactions/summary/by-cluster`, { headers: reqHeaders })
       .then(res => {
         if (res.data && res.data.length > 0) {
           const colors = ['#10b981', '#6366f1', '#f59e0b', '#06b6d4', '#8b5cf6', '#f43f5e'];
@@ -42,7 +47,7 @@ export default function ExpensesView({ activeProfileId }) {
       .catch(() => setClusterData([]));
 
     // Fetch pending receipts from DB
-    axios.get(`${API_BASE}/api/receipts?status=pending_review`)
+    axios.get(`${API_BASE}/api/receipts?status=pending_review`, { headers: reqHeaders })
       .then(res => setPendingReceipts(res.data || []))
       .catch(() => setPendingReceipts([]))
       .finally(() => setLoading(false));

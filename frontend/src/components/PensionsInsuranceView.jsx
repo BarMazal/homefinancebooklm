@@ -5,7 +5,7 @@ import {
 } from 'lucide-react';
 import axios from 'axios';
 
-const API_BASE = 'http://127.0.0.1:8900';
+const API_BASE = 'http://127.0.0.1:8910';
 
 const STATUTORY_PORTALS = [
   {
@@ -62,13 +62,15 @@ export default function PensionsInsuranceView({ activeProfileId }) {
   });
 
   const fetchPolicies = () => {
+    if (!activeProfileId) return;
+    const reqHeaders = { 'X-Profile-Id': activeProfileId };
     setLoading(true);
-    axios.get(`${API_BASE}/api/pensions`)
+    axios.get(`${API_BASE}/api/pensions`, { headers: reqHeaders })
       .then(res => setPolicies(res.data || []))
       .catch(() => setPolicies([]))
       .finally(() => setLoading(false));
 
-    axios.get(`${API_BASE}/api/pensions/audit/duplicates`)
+    axios.get(`${API_BASE}/api/pensions/audit/duplicates`, { headers: reqHeaders })
       .then(res => setDuplicates(res.data?.duplicates || []))
       .catch(() => setDuplicates([]));
   };

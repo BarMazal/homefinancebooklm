@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Building, Building2, Plus, Percent, ShieldCheck, CheckCircle2 } from 'lucide-react';
 import axios from 'axios';
 
-const API_BASE = 'http://127.0.0.1:8900';
+const API_BASE = 'http://127.0.0.1:8910';
 
 export default function RealEstateView({ activeProfileId }) {
   const [properties, setProperties] = useState([]);
@@ -17,8 +17,13 @@ export default function RealEstateView({ activeProfileId }) {
   });
 
   const fetchProperties = () => {
+    if (!activeProfileId) return;
+    setProperties([]);
+    setSelectedPropertyId(null);
     setLoading(true);
-    axios.get(`${API_BASE}/api/real-estate/properties`)
+    axios.get(`${API_BASE}/api/real-estate/properties`, {
+      headers: { 'X-Profile-Id': activeProfileId }
+    })
       .then(res => {
         setProperties(res.data || []);
         if (res.data && res.data.length > 0) {
