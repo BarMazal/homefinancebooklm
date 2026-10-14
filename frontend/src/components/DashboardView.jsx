@@ -81,18 +81,20 @@ export default function DashboardView({ fxRate, activeProfileId, activeProfileNa
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1rem' }}>
         <div className="glass-panel" style={{ padding: '1.25rem' }}>
           <span style={{ color: '#94a3b8', fontSize: '0.85rem' }}>Total Net Worth</span>
-          <h2 style={{ fontSize: '1.8rem', color: 'white', marginTop: '0.25rem' }}>
+          <h2 style={{ fontSize: '1.8rem', color: (data?.total_net_worth || 0) >= 0 ? 'white' : '#fb7185', marginTop: '0.25rem' }}>
             ₪ {data ? data.total_net_worth.toLocaleString() : '0'}
           </h2>
-          <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>{isCleanSlate ? 'Awaiting Data Import' : 'Consolidated Assets'}</span>
+          <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>{isCleanSlate ? 'Awaiting Data Import' : 'Consolidated Assets & Debt'}</span>
         </div>
 
         <div className="glass-panel" style={{ padding: '1.25rem' }}>
           <span style={{ color: '#94a3b8', fontSize: '0.85rem' }}>Monthly Net Savings</span>
-          <h2 style={{ fontSize: '1.8rem', color: '#34d399', marginTop: '0.25rem' }}>
+          <h2 style={{ fontSize: '1.8rem', color: (data?.monthly_net_savings || 0) >= 0 ? '#34d399' : '#fb7185', marginTop: '0.25rem' }}>
             ₪ {data ? data.monthly_net_savings.toLocaleString() : '0'}
           </h2>
-          <span style={{ fontSize: '0.75rem', color: '#34d399' }}>{isCleanSlate ? '0% savings rate' : 'Active Savings Rate'}</span>
+          <span style={{ fontSize: '0.75rem', color: '#34d399' }}>
+            {data?.target_month_label ? `Period: ${data.target_month_label}` : 'Active Savings Rate'}
+          </span>
         </div>
 
         <div className="glass-panel" style={{ padding: '1.25rem' }}>
@@ -100,7 +102,9 @@ export default function DashboardView({ fxRate, activeProfileId, activeProfileNa
           <h2 style={{ fontSize: '1.8rem', color: '#fb7185', marginTop: '0.25rem' }}>
             ₪ {data ? data.monthly_expenses.toLocaleString() : '0'}
           </h2>
-          <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>{isCleanSlate ? '0 items logged' : 'Active Profile Expenses'}</span>
+          <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
+            {data?.target_month_label ? `Period: ${data.target_month_label} (Excl. Transfers)` : 'Living Expenses'}
+          </span>
         </div>
 
         <div className="glass-panel" style={{ padding: '1.25rem' }}>
@@ -108,7 +112,7 @@ export default function DashboardView({ fxRate, activeProfileId, activeProfileNa
           <h2 style={{ fontSize: '1.8rem', color: '#818cf8', marginTop: '0.25rem' }}>
             {data ? data.portfolio_xirr.toFixed(2) : '0.00'} %
           </h2>
-          <span style={{ fontSize: '0.8rem', color: '#94a3b8' }}>{isCleanSlate ? 'No active cashflows' : 'Weighted Savings + Stocks'}</span>
+          <span style={{ fontSize: '0.8rem', color: '#94a3b8' }}>{data?.portfolio_xirr ? 'Weighted Savings + Stocks' : 'Requires Investment Account'}</span>
         </div>
       </div>
 

@@ -12,6 +12,13 @@ class AccountBase(BaseModel):
 class AccountCreate(AccountBase):
     pass
 
+class AccountUpdate(BaseModel):
+    name: Optional[str] = None
+    type: Optional[str] = None
+    institution: Optional[str] = None
+    currency: Optional[str] = None
+    current_balance: Optional[float] = None
+
 class AccountResponse(AccountBase):
     id: int
     last_uploaded_at: Optional[datetime] = None

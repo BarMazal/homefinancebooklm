@@ -30,7 +30,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="Home Finance BookLM API",
     description="Backend API for personal finance ingestion, OCR, XIRR math, pensions, real estate, and NotebookLM AI integration.",
-    version="1.0.0",
+    version="1.0.1",
     lifespan=lifespan
 )
 
