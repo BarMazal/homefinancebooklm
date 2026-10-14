@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import Navigation from './components/Navigation';
 import DashboardView from './components/DashboardView';
+import AccountsView from './components/AccountsView';
 import ExpensesView from './components/ExpensesView';
 import InvestmentsView from './components/InvestmentsView';
 import PensionsInsuranceView from './components/PensionsInsuranceView';
@@ -164,7 +165,9 @@ export default function App() {
   const renderActiveView = () => {
     switch (activeTab) {
       case 'overview':
-        return <DashboardView fxRate={fxRate} activeProfileId={activeProfile?.id} activeProfileName={activeProfile?.name} />;
+        return <DashboardView fxRate={fxRate} activeProfileId={activeProfile?.id} activeProfileName={activeProfile?.name} setActiveTab={setActiveTab} />;
+      case 'accounts':
+        return <AccountsView activeProfileId={activeProfile?.id} />;
       case 'expenses':
         return <ExpensesView activeProfileId={activeProfile?.id} />;
       case 'receipts':

@@ -260,7 +260,7 @@ export default function AccountsView({ activeProfileId }) {
                   type="text" 
                   value={editingAccount.name} 
                   onChange={(e) => setEditingAccount({ ...editingAccount, name: e.target.value })}
-                  placeholder="e.g. בנק אוצר החייל - עו\"ש"
+                  placeholder="e.g. בנק אוצר החייל - עו״ש"
                   style={{ width: '100%', padding: '0.65rem 0.85rem', background: '#1e293b', border: '1px solid rgba(255,255,255,0.15)', borderRadius: '6px', color: 'white' }}
                 />
               </div>

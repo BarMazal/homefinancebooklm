@@ -8,7 +8,7 @@ import axios from 'axios';
 
 const API_BASE = 'http://127.0.0.1:8910';
 
-export default function DashboardView({ fxRate, activeProfileId, activeProfileName }) {
+export default function DashboardView({ fxRate, activeProfileId, activeProfileName, setActiveTab }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -79,12 +79,32 @@ export default function DashboardView({ fxRate, activeProfileId, activeProfileNa
 
       {/* Summary KPI Cards */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1rem' }}>
-        <div className="glass-panel" style={{ padding: '1.25rem' }}>
-          <span style={{ color: '#94a3b8', fontSize: '0.85rem' }}>Total Net Worth</span>
+        <div className="glass-panel" style={{ padding: '1.25rem', position: 'relative' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span style={{ color: '#94a3b8', fontSize: '0.85rem' }}>Total Net Worth</span>
+            {setActiveTab && (
+              <button 
+                onClick={() => setActiveTab('accounts')}
+                style={{ 
+                  background: 'rgba(99, 102, 241, 0.15)', 
+                  border: '1px solid rgba(99, 102, 241, 0.3)', 
+                  color: '#818cf8', 
+                  fontSize: '0.72rem', 
+                  padding: '0.2rem 0.5rem', 
+                  borderRadius: '4px', 
+                  cursor: 'pointer' 
+                }}
+              >
+                Set Real Balances ↗
+              </button>
+            )}
+          </div>
           <h2 style={{ fontSize: '1.8rem', color: (data?.total_net_worth || 0) >= 0 ? 'white' : '#fb7185', marginTop: '0.25rem' }}>
             ₪ {data ? data.total_net_worth.toLocaleString() : '0'}
           </h2>
-          <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>{isCleanSlate ? 'Awaiting Data Import' : 'Consolidated Assets & Debt'}</span>
+          <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
+            {data?.total_net_worth < 0 ? 'Raw ledger sum without opening balances' : 'Consolidated Assets & Debt'}
+          </span>
         </div>
 
         <div className="glass-panel" style={{ padding: '1.25rem' }}>
@@ -107,12 +127,32 @@ export default function DashboardView({ fxRate, activeProfileId, activeProfileNa
           </span>
         </div>
 
-        <div className="glass-panel" style={{ padding: '1.25rem' }}>
-          <span style={{ color: '#94a3b8', fontSize: '0.85rem' }}>Portfolios XIRR (Annual)</span>
+        <div className="glass-panel" style={{ padding: '1.25rem', position: 'relative' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span style={{ color: '#94a3b8', fontSize: '0.85rem' }}>Portfolios XIRR (Annual)</span>
+            {setActiveTab && (
+              <button 
+                onClick={() => setActiveTab('accounts')}
+                style={{ 
+                  background: 'rgba(99, 102, 241, 0.15)', 
+                  border: '1px solid rgba(99, 102, 241, 0.3)', 
+                  color: '#818cf8', 
+                  fontSize: '0.72rem', 
+                  padding: '0.2rem 0.5rem', 
+                  borderRadius: '4px', 
+                  cursor: 'pointer' 
+                }}
+              >
+                Configure Accounts ↗
+              </button>
+            )}
+          </div>
           <h2 style={{ fontSize: '1.8rem', color: '#818cf8', marginTop: '0.25rem' }}>
             {data ? data.portfolio_xirr.toFixed(2) : '0.00'} %
           </h2>
-          <span style={{ fontSize: '0.8rem', color: '#94a3b8' }}>{data?.portfolio_xirr ? 'Weighted Savings + Stocks' : 'Requires Investment Account'}</span>
+          <span style={{ fontSize: '0.8rem', color: '#94a3b8' }}>
+            {data?.portfolio_xirr ? 'Weighted Savings + Stocks' : 'Requires Investment Account'}
+          </span>
         </div>
       </div>
 

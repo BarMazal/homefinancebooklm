@@ -13,7 +13,8 @@ import {
   Receipt, 
   Plus,
   Check,
-  X
+  X,
+  Wallet
 } from 'lucide-react';
 
 export default function Navigation({ 
@@ -38,6 +39,7 @@ export default function Navigation({
 
   const categoryHubs = [
     { id: 'overview', label: 'Executive Overview', icon: BarChart3 },
+    { id: 'accounts', label: 'Accounts & Balances', icon: Wallet },
     { id: 'expenses', label: 'Expenses Hub', icon: CreditCard },
     { id: 'investments', label: 'Savings & Investments', icon: TrendingUp },
     { id: 'pensions', label: 'Pensions & Insurances', icon: ShieldCheck },
