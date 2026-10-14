@@ -5,9 +5,235 @@ import {
   BookOpen, Search, Eye, FileText, Check, ChevronRight, Layers, Sparkles, 
   Folder, ExternalLink, X, Compass, FileCheck, LogOut, UserCheck,
   Play, Square, Radio, ArrowUpRight, ArrowDownLeft, ArrowUpDown, ArrowUp, ArrowDown,
-  Landmark, CreditCard, Receipt, Filter, Pencil, Plus, Tag
+  Landmark, CreditCard, Receipt, Filter, Pencil, Plus, Tag, ChevronDown
 } from 'lucide-react';
 import axios from 'axios';
+
+function CategoryCombobox({ value, onChange, categories, onAddCategory }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [query, setQuery] = useState(value || '');
+  const [openUpwards, setOpenUpwards] = useState(false);
+  const containerRef = useRef(null);
+
+  // Sync internal query when external value changes
+  useEffect(() => {
+    setQuery(value || '');
+  }, [value]);
+
+  // Outside click to close dropdown and commit typed value if new
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (containerRef.current && !containerRef.current.contains(e.target)) {
+        if (isOpen) {
+          const clean = query.trim();
+          if (clean && clean !== (value || '').trim()) {
+            onAddCategory(clean);
+            onChange(clean);
+          }
+          setIsOpen(false);
+        }
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [isOpen, query, value, onChange, onAddCategory]);
+
+  // Detect whether to open upwards or downwards
+  useEffect(() => {
+    if (isOpen && containerRef.current) {
+      const rect = containerRef.current.getBoundingClientRect();
+      const spaceBelow = window.innerHeight - rect.bottom;
+      if (spaceBelow < 220 && rect.top > 220) {
+        setOpenUpwards(true);
+      } else {
+        setOpenUpwards(false);
+      }
+    }
+  }, [isOpen]);
+
+  const filteredCategories = useMemo(() => {
+    if (!query.trim()) return categories;
+    const q = query.toLowerCase().trim();
+    return categories.filter(c => c.toLowerCase().includes(q));
+  }, [categories, query]);
+
+  const exactMatchExists = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return categories.some(c => c.toLowerCase() === q);
+  }, [categories, query]);
+
+  const handleSelect = (cat) => {
+    setQuery(cat);
+    onChange(cat);
+    setIsOpen(false);
+  };
+
+  const handleCreateNew = () => {
+    const clean = query.trim();
+    if (!clean) return;
+    onAddCategory(clean);
+    onChange(clean);
+    setIsOpen(false);
+  };
+
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      if (!exactMatchExists && query.trim()) {
+        handleCreateNew();
+      } else if (filteredCategories.length > 0) {
+        handleSelect(filteredCategories[0]);
+      }
+      setIsOpen(false);
+    } else if (e.key === 'Escape') {
+      setIsOpen(false);
+    } else if (e.key === 'ArrowDown') {
+      setIsOpen(true);
+    }
+  };
+
+  return (
+    <div ref={containerRef} style={{ position: 'relative', width: '160px' }}>
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        background: '#0f172a',
+        border: isOpen ? '1px solid #38bdf8' : '1px solid rgba(56, 189, 248, 0.4)',
+        borderRadius: '4px',
+        padding: '0 4px',
+        boxShadow: isOpen ? '0 0 0 2px rgba(56, 189, 248, 0.2)' : 'none',
+        transition: 'all 0.15s ease'
+      }}>
+        <input 
+          type="text"
+          value={query}
+          onChange={(e) => {
+            const val = e.target.value;
+            setQuery(val);
+            onChange(val);
+            if (!isOpen) setIsOpen(true);
+          }}
+          onFocus={() => setIsOpen(true)}
+          onKeyDown={handleKeyDown}
+          placeholder="Select / type..."
+          style={{
+            width: '100%',
+            background: 'transparent',
+            border: 'none',
+            color: 'white',
+            fontSize: '0.8rem',
+            padding: '4px 2px',
+            outline: 'none'
+          }}
+        />
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            setIsOpen(!isOpen);
+          }}
+          style={{
+            background: 'none',
+            border: 'none',
+            color: isOpen ? '#38bdf8' : '#94a3b8',
+            cursor: 'pointer',
+            padding: '2px',
+            display: 'flex',
+            alignItems: 'center',
+            borderRadius: '2px'
+          }}
+          title="Click to view all categories or type your own"
+        >
+          <ChevronDown 
+            size={14} 
+            style={{ 
+              transform: isOpen ? 'rotate(180deg)' : 'none', 
+              transition: 'transform 0.15s ease' 
+            }} 
+          />
+        </button>
+      </div>
+
+      {/* Floating Dropdown Menu */}
+      {isOpen && (
+        <div style={{
+          position: 'absolute',
+          [openUpwards ? 'bottom' : 'top']: '100%',
+          left: 0,
+          right: 0,
+          [openUpwards ? 'marginBottom' : 'marginTop']: '3px',
+          background: '#0b1329',
+          border: '1px solid #38bdf8',
+          borderRadius: '6px',
+          boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.75), 0 8px 10px -6px rgba(0, 0, 0, 0.75)',
+          maxHeight: '210px',
+          overflowY: 'auto',
+          zIndex: 9999
+        }}>
+          {/* Prompt to add brand-new category if user typed non-existing category */}
+          {query.trim() && !exactMatchExists && (
+            <div
+              onClick={handleCreateNew}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.4rem',
+                padding: '7px 10px',
+                background: 'rgba(56, 189, 248, 0.15)',
+                color: '#38bdf8',
+                fontSize: '0.78rem',
+                fontWeight: 600,
+                cursor: 'pointer',
+                borderBottom: '1px solid rgba(255,255,255,0.08)'
+              }}
+              onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(56, 189, 248, 0.28)'}
+              onMouseLeave={(e) => e.currentTarget.style.background = 'rgba(56, 189, 248, 0.15)'}
+              title="Add this new category to global list"
+            >
+              <Plus size={13} />
+              <span>Add "{query.trim()}" to global list</span>
+            </div>
+          )}
+
+          {/* List of matching / all categories */}
+          {filteredCategories.length > 0 ? (
+            filteredCategories.map(cat => {
+              const isSelected = (value || '').toLowerCase() === cat.toLowerCase();
+              return (
+                <div
+                  key={cat}
+                  onClick={() => handleSelect(cat)}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: '6px 10px',
+                    fontSize: '0.78rem',
+                    color: isSelected ? '#38bdf8' : '#e2e8f0',
+                    background: isSelected ? 'rgba(56, 189, 248, 0.12)' : 'transparent',
+                    cursor: 'pointer',
+                    transition: 'background 0.1s'
+                  }}
+                  onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.08)'}
+                  onMouseLeave={(e) => e.currentTarget.style.background = isSelected ? 'rgba(56, 189, 248, 0.12)' : 'transparent'}
+                >
+                  <span>{cat}</span>
+                  {isSelected && <Check size={12} color="#38bdf8" />}
+                </div>
+              );
+            })
+          ) : (
+            !query.trim() && (
+              <div style={{ padding: '8px 10px', fontSize: '0.75rem', color: '#94a3b8', textAlign: 'center' }}>
+                No categories found
+              </div>
+            )
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function SettingsView({ 
   notebookLmConnected, 
@@ -1765,19 +1991,13 @@ export default function SettingsView({
                               />
                             </td>
 
-                            {/* Editable Category */}
+                            {/* Editable Category Combobox */}
                             <td style={{ padding: '0.6rem 0.5rem', whiteSpace: 'nowrap' }}>
-                              <input 
-                                list="category-names-datalist" 
+                              <CategoryCombobox 
                                 value={editFormData.category} 
-                                onChange={e => setEditFormData(prev => ({ ...prev, category: e.target.value }))}
-                                onBlur={e => {
-                                  if (e.target.value.trim()) {
-                                    handleAddCategory(e.target.value.trim());
-                                  }
-                                }}
-                                placeholder="Select or type new..."
-                                style={{ background: '#0f172a', border: '1px solid #38bdf8', color: 'white', borderRadius: '4px', padding: '4px 6px', fontSize: '0.8rem', width: '145px' }}
+                                onChange={(cat) => setEditFormData(prev => ({ ...prev, category: cat }))}
+                                categories={allCategories}
+                                onAddCategory={handleAddCategory}
                               />
                             </td>
 
