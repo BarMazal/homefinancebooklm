@@ -37,23 +37,39 @@ async def get_portfolio_summary(db: AsyncSession = Depends(get_db)):
 
     total_val = 0.0
     account_ids = [a.id for a in accounts]
+    portfolios_list = []
+    
     for acc in accounts:
         rate = fx_rate if acc.currency == "USD" else 1.0
-        total_val += acc.current_balance * rate
+        val_ils = round(acc.current_balance * rate, 2)
+        total_val += val_ils
+        portfolios_list.append({
+            "id": acc.id,
+            "name": acc.name,
+            "institution": acc.institution or "Brokerage",
+            "type": acc.type,
+            "currency": acc.currency or "ILS",
+            "balance": round(acc.current_balance, 2),
+            "balance_ils": val_ils,
+            "rate_used": rate
+        })
 
     tx_res = await db.execute(select(Transaction).where(Transaction.account_id.in_(account_ids)).order_by(Transaction.date.asc()))
     txs = tx_res.scalars().all()
 
-    if txs and total_val > 0:
+    # Accounts with explicit cashflow transactions
+    accounts_with_txs = {t.account_id for t in txs}
+    val_of_tx_accounts = sum(a.current_balance * (fx_rate if a.currency == "USD" else 1.0) for a in accounts if a.id in accounts_with_txs)
+
+    if txs and val_of_tx_accounts > 0:
         xirr_dates = [t.date for t in txs] + [date.today()]
-        xirr_amounts = [-abs(t.amount) for t in txs] + [total_val]
+        xirr_amounts = [-abs(t.amount) for t in txs] + [val_of_tx_accounts]
         xirr_pct = calculate_portfolio_xirr(xirr_dates, xirr_amounts)
     else:
         xirr_pct = 0.0
 
     # Build historical yearly points dynamically from DB transactions if present
     yearly_map: Dict[str, Dict[str, float]] = {}
-    running_balance = 0.0
     running_deposited = 0.0
 
     for t in txs:
@@ -61,14 +77,17 @@ async def get_portfolio_summary(db: AsyncSession = Depends(get_db)):
         if yr not in yearly_map:
             yearly_map[yr] = {"Balance": 0.0, "Deposited": 0.0}
         
-        if t.amount > 0:
-            running_deposited += t.amount
-        running_balance += t.amount
-
-        yearly_map[yr]["Balance"] = round(running_balance, 2)
+        amt = abs(t.amount)
+        running_deposited += amt
         yearly_map[yr]["Deposited"] = round(running_deposited, 2)
+        yearly_map[yr]["Balance"] = round(running_deposited, 2)
 
-    history = [{"year": yr, "Balance": data["Balance"], "Deposited": data["Deposited"]} for yr, data in yearly_map.items()]
+    # Adjust final year balance to reflect current portfolio valuation
+    if yearly_map:
+        latest_yr = max(yearly_map.keys())
+        yearly_map[latest_yr]["Balance"] = round(total_val, 2)
+
+    history = [{"year": yr, "Balance": data["Balance"], "Deposited": data["Deposited"]} for yr, data in sorted(yearly_map.items())]
 
     total_deposited = running_deposited
     gains = total_val - total_deposited if total_val > total_deposited else 0.0
@@ -77,7 +96,8 @@ async def get_portfolio_summary(db: AsyncSession = Depends(get_db)):
         "total_valuation": round(total_val, 2),
         "cumulative_gains": round(gains, 2),
         "xirr_annual_percentage": round(xirr_pct, 2),
-        "history": history
+        "history": history,
+        "portfolios": portfolios_list
     }
 
 @router.get("/savings-projection")

@@ -138,9 +138,12 @@ async def get_dashboard_overview(db: AsyncSession = Depends(get_db)):
     inv_acc_ids = [a.id for a in accounts if a.type in ["savings", "investment", "brokerage"]]
     inv_txs = [t for t in transactions if (t.account_id in inv_acc_ids or t.cluster == "Investments")]
     inv_total_val = sum((a.current_balance * (fx_rate if a.currency == "USD" else 1.0)) for a in accounts if a.id in inv_acc_ids)
-    if inv_txs and inv_total_val > 0:
+    accounts_with_txs = {t.account_id for t in inv_txs}
+    val_of_tx_accounts = sum(a.current_balance * (fx_rate if a.currency == "USD" else 1.0) for a in accounts if a.id in accounts_with_txs)
+    
+    if inv_txs and (val_of_tx_accounts or inv_total_val) > 0:
         xirr_dates = [t.date for t in inv_txs] + [date.today()]
-        xirr_amounts = [-abs(t.amount) for t in inv_txs] + [inv_total_val]
+        xirr_amounts = [-abs(t.amount) for t in inv_txs] + [val_of_tx_accounts or inv_total_val]
         portfolio_xirr = calculate_portfolio_xirr(xirr_dates, xirr_amounts)
     else:
         portfolio_xirr = 0.0
