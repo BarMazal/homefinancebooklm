@@ -14,6 +14,9 @@ Write-Host "Installing Python Backend Dependencies..." -ForegroundColor Yellow
 & .\venv\Scripts\pip.exe install -r requirements.txt
 & .\venv\Scripts\playwright.exe install chromium
 
+Write-Host "Installing Tesseract OCR (Hebrew + English receipt OCR)..." -ForegroundColor Yellow
+& powershell -ExecutionPolicy Bypass -File .\install_ocr.ps1
+
 Write-Host "Installing Frontend NPM Dependencies..." -ForegroundColor Yellow
 Push-Location frontend
 npm install

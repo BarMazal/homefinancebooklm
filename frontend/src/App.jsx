@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import Navigation from './components/Navigation';
 import DashboardView from './components/DashboardView';
@@ -48,7 +48,13 @@ const getStoredActiveProfile = (initialProfiles) => {
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('overview');
-  const [notebookLmConnected, setNotebookLmConnected] = useState(true);
+  const [notebookLmConnected, setNotebookLmConnected] = useState(false);
+  // Background NotebookLM connection: true while the backend is still verifying the session
+  const [notebookLmConnecting, setNotebookLmConnecting] = useState(true);
+  const [connectionInfo, setConnectionInfo] = useState(null);
+  const connectionPollRef = useRef(null);
+  const [notebookDetails, setNotebookDetails] = useState(null);
+  const [loadingNotebookDetails, setLoadingNotebookDetails] = useState(false);
   const [fxRate, setFxRate] = useState(3.65);
   const [retroPreviewActive, setRetroPreviewActive] = useState(false);
   const [retroData, setRetroData] = useState(null);
@@ -65,12 +71,74 @@ export default function App() {
     axios.defaults.headers.common['X-Profile-Id'] = activeProfile.id;
   }
 
+  const fetchNotebookData = (profileId, force = false) => {
+    if (!profileId) return;
+    setLoadingNotebookDetails(true);
+    const reqHeaders = { 'X-Profile-Id': profileId };
+
+    axios.get(`${API_BASE}/api/notebooklm/active-notebook-details${force ? '?force_refresh=true' : ''}`, { headers: reqHeaders })
+      .then(res => {
+        // Connection status itself is tracked by the background connection poller below
+        setNotebookDetails(res.data && res.data.success ? res.data : null);
+      })
+      .catch(() => {
+        setNotebookDetails(null);
+      })
+      .finally(() => {
+        setLoadingNotebookDetails(false);
+      });
+  };
+
+  const applyConnectionState = (data) => {
+    setConnectionInfo(data);
+    setNotebookLmConnecting(data.state === 'connecting');
+    setNotebookLmConnected(!!data.authenticated);
+  };
+
+  // Polls the backend's background connection check without ever blocking the UI.
+  // restart=true asks the backend to re-run the check (e.g. "Refresh Status").
+  const checkNotebookConnection = (profileId, restart = false) => {
+    if (!profileId) return;
+    if (connectionPollRef.current) clearTimeout(connectionPollRef.current);
+    setNotebookLmConnecting(true);
+    const reqHeaders = { 'X-Profile-Id': profileId };
+
+    const poll = (first) => {
+      const req = first && restart
+        ? axios.post(`${API_BASE}/api/notebooklm/connect`, null, { headers: reqHeaders })
+        : axios.get(`${API_BASE}/api/notebooklm/connection-state`, { headers: reqHeaders });
+      req
+        .then(res => {
+          // Ignore results that arrive after the user switched to another profile
+          if (String(axios.defaults.headers.common['X-Profile-Id']) !== String(profileId)) return;
+          applyConnectionState(res.data);
+          if (res.data.state === 'connecting') {
+            connectionPollRef.current = setTimeout(() => poll(false), 1000);
+          }
+        })
+        .catch(() => {
+          // Backend may still be starting up: keep showing "connecting" and retry
+          connectionPollRef.current = setTimeout(() => poll(first), 2000);
+        });
+    };
+    poll(true);
+  };
+
+  useEffect(() => () => clearTimeout(connectionPollRef.current), []);
+
   useEffect(() => {
     if (activeProfile?.id) {
       axios.defaults.headers.common['X-Profile-Id'] = activeProfile.id;
       localStorage.setItem(STORAGE_ACTIVE_PROFILE_KEY, JSON.stringify(activeProfile));
     }
   }, [activeProfile]);
+
+  // Start (or attach to) the background NotebookLM connection whenever the profile changes
+  useEffect(() => {
+    if (activeProfile?.id) {
+      checkNotebookConnection(activeProfile.id);
+    }
+  }, [activeProfile?.id]);
 
   useEffect(() => {
     // 1. Fetch live USD/ILS rate from FastAPI backend
@@ -86,37 +154,43 @@ export default function App() {
           setProfiles(serverProfiles);
           localStorage.setItem(STORAGE_PROFILES_KEY, JSON.stringify(serverProfiles));
 
-          // Resolve active profile:
-          let target = null;
-          try {
-            const savedRaw = localStorage.getItem(STORAGE_ACTIVE_PROFILE_KEY);
-            if (savedRaw) {
-              const savedObj = JSON.parse(savedRaw);
-              target = serverProfiles.find(p => p.id === savedObj.id);
-            }
-          } catch (e) {}
+          // Priority: server's active profile (e.g. Ingestion try)
+          const serverActive = serverProfiles.find(p => p.is_active);
+          let target = serverActive;
 
-          // Fallback to server active profile if not set or found in list
           if (!target) {
-            target = serverProfiles.find(p => p.is_active) || serverProfiles[0];
+            try {
+              const savedRaw = localStorage.getItem(STORAGE_ACTIVE_PROFILE_KEY);
+              if (savedRaw) {
+                const savedObj = JSON.parse(savedRaw);
+                target = serverProfiles.find(p => p.id === savedObj.id);
+              }
+            } catch (e) {}
+          }
+
+          if (!target) {
+            target = serverProfiles[0];
           }
 
           setActiveProfile(target);
           localStorage.setItem(STORAGE_ACTIVE_PROFILE_KEY, JSON.stringify(target));
           axios.defaults.headers.common['X-Profile-Id'] = target.id;
 
-          // If local choice differs from backend active profile, align backend
+          // Align backend if needed
           if (!target.is_active) {
             axios.post(`${API_BASE}/api/profiles/${target.id}/activate`).catch(() => {});
           }
+
+          // Immediately connect to notebook & read resources, notes, and artifacts!
+          fetchNotebookData(target.id);
         }
       })
-      .catch(err => console.error('Failed to load profiles:', err));
-
-    // 3. Check NotebookLM status
-    axios.get(`${API_BASE}/api/notebooklm/status`)
-      .then(res => setNotebookLmConnected(res.data.authenticated))
-      .catch(() => setNotebookLmConnected(true));
+      .catch(err => {
+        console.error('Failed to load profiles:', err);
+        if (activeProfile?.id) {
+          fetchNotebookData(activeProfile.id);
+        }
+      });
   }, []);
 
   const handleSwitchProfile = (profileId) => {
@@ -135,7 +209,10 @@ export default function App() {
       setProfiles(updatedProfiles);
       localStorage.setItem(STORAGE_PROFILES_KEY, JSON.stringify(updatedProfiles));
 
-      // 3. Fire backend activation in background (non-blocking)
+      // 3. Immediately read notebook resources, notes, and artifacts for newly chosen profile!
+      fetchNotebookData(profileId);
+
+      // 4. Fire backend activation in background (non-blocking)
       axios.post(`${API_BASE}/api/profiles/${profileId}/activate`).catch(err => {
         console.error('Failed to activate profile on backend:', err);
       });
@@ -169,7 +246,7 @@ export default function App() {
       case 'accounts':
         return <AccountsView activeProfileId={activeProfile?.id} />;
       case 'expenses':
-        return <ExpensesView activeProfileId={activeProfile?.id} />;
+        return <ExpensesView activeProfileId={activeProfile?.id} activeProfileName={activeProfile?.name} />;
       case 'receipts':
         return <ReceiptsView activeProfileId={activeProfile?.id} />;
       case 'investments':
@@ -184,8 +261,14 @@ export default function App() {
         return <SimulatorView />;
       case 'settings':
         return <SettingsView 
-                 notebookLmConnected={notebookLmConnected} 
+                 notebookLmConnected={notebookLmConnected}
                  setNotebookLmConnected={setNotebookLmConnected}
+                 notebookLmConnecting={notebookLmConnecting}
+                 connectionInfo={connectionInfo}
+                 onCheckConnection={(restart = true) => checkNotebookConnection(activeProfile?.id, restart)}
+                 notebookDetails={notebookDetails}
+                 loadingNotebookDetails={loadingNotebookDetails}
+                 onRefreshNotebookDetails={fetchNotebookData}
                  retroPreviewActive={retroPreviewActive}
                  setRetroPreviewActive={setRetroPreviewActive}
                  retroData={retroData}
@@ -206,6 +289,9 @@ export default function App() {
         activeTab={activeTab} 
         setActiveTab={setActiveTab} 
         notebookLmConnected={notebookLmConnected}
+        notebookLmConnecting={notebookLmConnecting}
+        notebookDetails={notebookDetails}
+        loadingNotebookDetails={loadingNotebookDetails}
         profiles={profiles}
         activeProfile={activeProfile}
         onSwitchProfile={handleSwitchProfile}

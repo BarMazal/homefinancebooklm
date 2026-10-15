@@ -56,6 +56,15 @@ async def activate_profile(profile_id: int):
     if not os.path.exists(db_path):
         await init_db(profile_id)
 
+    # Immediately warm up notebook details cache in background for activated profile
+    try:
+        import asyncio
+        from app.services.notebooklm_service import notebooklm_service
+        notebooklm_service.start_background_connect(profile_id, force=True)
+        asyncio.create_task(notebooklm_service.prefetch_active_profile_notebook(profile_id))
+    except Exception as e:
+        print(f"[Activate Prefetch Error]: {e}")
+
     data = profile_manager.get_profiles_data()
     for p_item in data.get("profiles", []):
         if p_item["id"] == profile_id:

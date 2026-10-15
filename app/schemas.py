@@ -2,6 +2,10 @@ from pydantic import BaseModel, Field
 from typing import Optional, List, Dict, Any
 from datetime import date, datetime
 
+# Alias for fields literally named `date`: `date: Optional[date] = None` inside a class
+# makes the annotation see the field's own default (None) instead of the type.
+DateType = date
+
 class AccountBase(BaseModel):
     name: str
     type: str
@@ -58,7 +62,7 @@ class ReceiptResponse(BaseModel):
     file_path: str
     merchant: Optional[str] = None
     amount: Optional[float] = None
-    date: Optional[date] = None
+    date: Optional[DateType] = None
     category: str
     line_items: List[Dict[str, Any]] = []
     confidence_scores: Dict[str, float] = {}

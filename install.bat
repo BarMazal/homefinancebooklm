@@ -14,6 +14,9 @@ python -m pip install --upgrade pip
 pip install -r requirements.txt
 playwright install chromium
 
+echo Installing Tesseract OCR (Hebrew + English receipt OCR)...
+powershell -ExecutionPolicy Bypass -File "%~dp0install_ocr.ps1"
+
 echo Installing Frontend NPM Dependencies...
 cd frontend
 call npm install

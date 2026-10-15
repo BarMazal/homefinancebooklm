@@ -8,6 +8,7 @@ import {
   Landmark, CreditCard, Receipt, Filter, Pencil, Plus, Tag, ChevronDown
 } from 'lucide-react';
 import axios from 'axios';
+import MoneyLoader from './MoneyLoader';
 
 function CategoryCombobox({ value, onChange, categories, onAddCategory }) {
   const [isOpen, setIsOpen] = useState(false);
@@ -238,6 +239,12 @@ function CategoryCombobox({ value, onChange, categories, onAddCategory }) {
 export default function SettingsView({ 
   notebookLmConnected, 
   setNotebookLmConnected,
+  notebookLmConnecting,
+  connectionInfo,
+  onCheckConnection,
+  notebookDetails: initialNotebookDetails,
+  loadingNotebookDetails: initialLoadingDetails,
+  onRefreshNotebookDetails,
   retroPreviewActive,
   setRetroPreviewActive,
   retroData,
@@ -303,7 +310,9 @@ export default function SettingsView({
   const [savingProfile, setSavingProfile] = useState(false);
   const [profileMsg, setProfileMsg] = useState('');
   const [browserActive, setBrowserActive] = useState(false);
-  const [checkingStatus, setCheckingStatus] = useState(false);
+  // True while the backend's background NotebookLM connection check is running.
+  // Auth actions are disabled meanwhile and re-enabled once it succeeds or fails.
+  const checkingStatus = !!notebookLmConnecting;
   const [actionLoading, setActionLoading] = useState(false);
   const [accountNotebooks, setAccountNotebooks] = useState([]);
   const [loadingNotebooks, setLoadingNotebooks] = useState(false);
@@ -312,31 +321,37 @@ export default function SettingsView({
   const [authRequiredModal, setAuthRequiredModal] = useState(false);
 
   // Notebook Resources & Artifacts Explorer State
-  const [notebookDetails, setNotebookDetails] = useState(null);
-  const [loadingDetails, setLoadingDetails] = useState(false);
+  const [notebookDetails, setNotebookDetails] = useState(initialNotebookDetails || null);
+  const [loadingDetails, setLoadingDetails] = useState(initialLoadingDetails || false);
   const [explorerTab, setExplorerTab] = useState('sources'); // 'sources' | 'notes' | 'artifacts'
   const [sourceFulltextModal, setSourceFulltextModal] = useState(null);
   const [loadingFulltext, setLoadingFulltext] = useState(false);
 
+  useEffect(() => {
+    if (initialNotebookDetails) {
+      setNotebookDetails(initialNotebookDetails);
+    }
+  }, [initialNotebookDetails]);
+
+  useEffect(() => {
+    if (typeof initialLoadingDetails === 'boolean') {
+      setLoadingDetails(initialLoadingDetails);
+    }
+  }, [initialLoadingDetails]);
+
+  // Mirror the app-level background connection state into this view's fields
+  useEffect(() => {
+    if (!connectionInfo) return;
+    setAccountEmail(connectionInfo.account_email || null);
+    const pName = connectionInfo.nb_profile || '';
+    setNbProfileName(pName);
+    setEditingNbProfile(prev => prev || pName);
+    setBrowserActive(!!connectionInfo.browser_active);
+  }, [connectionInfo]);
+
+  // Re-runs the connection check in the background (non-blocking); App polls until done
   const fetchConnectionStatus = () => {
-    setCheckingStatus(true);
-    axios.get('http://127.0.0.1:8910/api/notebooklm/status')
-      .then(res => {
-        setNotebookLmConnected(!!res.data.authenticated);
-        setAccountEmail(res.data.account_email || null);
-        const pName = res.data.nb_profile || '';
-        setNbProfileName(pName);
-        setEditingNbProfile(prev => prev || pName);
-        setBrowserActive(!!res.data.browser_active);
-      })
-      .catch(() => {
-        setNotebookLmConnected(false);
-        setAccountEmail(null);
-        setBrowserActive(false);
-      })
-      .finally(() => {
-        setCheckingStatus(false);
-      });
+    if (onCheckConnection) onCheckConnection(true);
   };
 
   const handleSaveProfile = async () => {
@@ -376,15 +391,16 @@ export default function SettingsView({
         if (Array.isArray(data.custom_categories)) setCustomCategories(data.custom_categories);
         if (data.notebooklm_notebook_id) {
           setNotebookId(data.notebooklm_notebook_id);
-          fetchNotebookDetails(data.notebooklm_notebook_id);
+          if (!initialNotebookDetails || initialNotebookDetails.notebook_id !== data.notebooklm_notebook_id) {
+            fetchNotebookDetails(data.notebooklm_notebook_id, false);
+          }
         } else {
           setNotebookDetails(null);
         }
       })
       .catch(() => {});
 
-    // Check NotebookLM connection status
-    fetchConnectionStatus();
+    // NotebookLM connection status is checked in the background by App on profile change
   }, [activeProfile?.id]);
 
   const saveNotebookId = async (newId) => {
@@ -447,14 +463,17 @@ export default function SettingsView({
     }
   };
 
-  const fetchNotebookDetails = async (idToFetch) => {
+  const fetchNotebookDetails = async (idToFetch, force = true) => {
     const id = idToFetch || notebookId;
     if (!id || !id.trim()) return;
     setLoadingDetails(true);
     try {
-      const res = await axios.get(`http://127.0.0.1:8910/api/notebooklm/notebooks/${id.trim()}/details`);
+      const res = await axios.get(`http://127.0.0.1:8910/api/notebooklm/notebooks/${id.trim()}/details${force ? '?force_refresh=true' : ''}`);
       if (res.data.success) {
         setNotebookDetails(res.data);
+        if (onRefreshNotebookDetails && activeProfile?.id) {
+          onRefreshNotebookDetails(activeProfile.id, false);
+        }
       } else {
         setNotebookDetails(null);
       }
@@ -524,6 +543,8 @@ export default function SettingsView({
             setAccountEmail(check.data.account_email || null);
             setBrowserActive(false);
             clearInterval(interval);
+            // Sync the app-level connection state with the fresh login (returns instantly)
+            if (onCheckConnection) onCheckConnection(false);
             handleFetchAccountNotebooks();
           }
         } catch (e) {}
@@ -1015,7 +1036,11 @@ export default function SettingsView({
             <div>
               <h3 style={{ fontSize: '1.25rem', color: 'white' }}>Link Your NotebookLM Notebook</h3>
               <p style={{ color: '#94a3b8', fontSize: '0.85rem' }}>
-                {notebookLmConnected && accountEmail ? (
+                {checkingStatus ? (
+                  <span>
+                    Profile #{activeProfile?.id} ({nbProfileName ? `NB Profile: ${nbProfileName}` : 'Isolated'}) — checking Google NotebookLM connection...
+                  </span>
+                ) : notebookLmConnected && accountEmail ? (
                   <span>
                     Profile #{activeProfile?.id} ({nbProfileName ? `NB Profile: ${nbProfileName}` : 'Isolated'}) is connected to: <strong style={{ color: '#34d399' }}>{accountEmail}</strong>
                   </span>
@@ -1030,6 +1055,16 @@ export default function SettingsView({
 
           {/* Connection Status Badge & Actions */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+            {checkingStatus ? (
+              <div style={{
+                display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.4rem 0.8rem',
+                borderRadius: '20px', fontSize: '0.8rem', fontWeight: 600,
+                background: 'rgba(56, 189, 248, 0.15)', color: '#38bdf8',
+                border: '1px solid rgba(56, 189, 248, 0.3)'
+              }}>
+                <MoneyLoader size={13} /> Connecting...
+              </div>
+            ) : (
             <div style={{
               display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.4rem 0.8rem',
               borderRadius: '20px', fontSize: '0.8rem', fontWeight: 600,
@@ -1040,11 +1075,12 @@ export default function SettingsView({
               <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: notebookLmConnected ? '#10b981' : '#f59e0b' }} />
               {notebookLmConnected ? (accountEmail ? `Connected: ${accountEmail}` : 'Connected') : 'Not Connected'}
             </div>
+            )}
 
             <button 
               className={notebookLmConnected ? "btn-secondary" : "btn-primary"} 
               onClick={launchChromiumAuth} 
-              disabled={actionLoading}
+              disabled={actionLoading || checkingStatus}
               title="Launch isolated browser window to sign in"
               style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}
             >
@@ -1057,14 +1093,14 @@ export default function SettingsView({
               disabled={checkingStatus}
               title="Check if login completed"
             >
-              <RefreshCw size={14} className={checkingStatus ? "animate-spin" : ""} /> Refresh Status
+              {checkingStatus ? <MoneyLoader size={13} /> : <RefreshCw size={14} />} Refresh Status
             </button>
 
             {notebookLmConnected && (
               <button 
                 className="btn-secondary" 
                 onClick={handleDisconnectAccount} 
-                disabled={actionLoading}
+                disabled={actionLoading || checkingStatus}
                 title="Disconnect Google account from this profile"
                 style={{ borderColor: 'rgba(244, 63, 94, 0.4)', color: '#fb7185' }}
               >
@@ -1074,8 +1110,32 @@ export default function SettingsView({
           </div>
         </div>
 
+        {/* Background Connection In Progress Banner */}
+        {checkingStatus && (
+          <div style={{
+            marginBottom: '1.25rem',
+            padding: '0.85rem 1.15rem',
+            borderRadius: '10px',
+            background: 'rgba(56, 189, 248, 0.08)',
+            border: '1px solid rgba(56, 189, 248, 0.35)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.65rem'
+          }}>
+            <MoneyLoader size={22} counting color="#7dd3fc" />
+            <div>
+              <div style={{ fontSize: '0.85rem', color: '#7dd3fc', fontWeight: 600 }}>
+                Connecting to Google NotebookLM...
+              </div>
+              <div style={{ fontSize: '0.75rem', color: '#cbd5e1' }}>
+                Verifying the saved session for this profile in the background. Account actions are disabled until the check finishes.
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Live Browser Login Active Banner */}
-        {browserActive && !notebookLmConnected && (
+        {browserActive && !notebookLmConnected && !checkingStatus && (
           <div style={{
             marginBottom: '1.25rem',
             padding: '0.85rem 1.15rem',
@@ -1089,7 +1149,7 @@ export default function SettingsView({
             flexWrap: 'wrap'
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
-              <RefreshCw size={18} className="animate-spin text-blue-400" />
+              <MoneyLoader size={18} />
               <div>
                 <div style={{ fontSize: '0.85rem', color: '#93c5fd', fontWeight: 600 }}>
                   Google Sign-In Browser Active
@@ -1162,7 +1222,7 @@ export default function SettingsView({
               <button
                 className="btn-primary"
                 onClick={handleSaveProfile}
-                disabled={savingProfile || !editingNbProfile.trim()}
+                disabled={savingProfile || checkingStatus || !editingNbProfile.trim()}
                 style={{ padding: '0.45rem 0.85rem', fontSize: '0.8rem' }}
               >
                 {savingProfile ? 'Saving...' : 'Set Internal Profile'}
@@ -1170,6 +1230,7 @@ export default function SettingsView({
               {editingNbProfile !== `homefinance_p${activeProfile?.id}` && (
                 <button
                   className="btn-secondary"
+                  disabled={checkingStatus}
                   onClick={() => {
                     setEditingNbProfile(`homefinance_p${activeProfile?.id}`);
                     axios.post('http://127.0.0.1:8910/api/notebooklm/set-profile', {
@@ -1239,7 +1300,7 @@ export default function SettingsView({
               <button 
                 className="btn-primary" 
                 onClick={handleFetchAccountNotebooks}
-                disabled={loadingNotebooks}
+                disabled={loadingNotebooks || checkingStatus}
                 style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', whiteSpace: 'nowrap' }}
               >
                 <Compass size={16} /> 
@@ -1381,7 +1442,7 @@ export default function SettingsView({
                 disabled={loadingDetails}
                 title="Refresh live items from NotebookLM"
               >
-                <RefreshCw size={15} className={loadingDetails ? 'animate-spin' : ''} /> 
+                {loadingDetails ? <MoneyLoader size={14} /> : <RefreshCw size={15} />} 
                 {loadingDetails ? 'Syncing...' : 'Refresh Explorer'}
               </button>
 
@@ -1627,7 +1688,7 @@ export default function SettingsView({
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.6rem' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', fontSize: '0.9rem', color: '#e2e8f0', fontWeight: 600 }}>
                 {scanningRetro ? (
-                  <RefreshCw size={16} color="#38bdf8" className="animate-spin" />
+                  <MoneyLoader size={16} />
                 ) : (
                   <CheckCircle2 size={16} color="#34d399" />
                 )}
@@ -2334,7 +2395,7 @@ export default function SettingsView({
             </p>
             <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center' }}>
               <button className="btn-secondary" onClick={() => setAuthRequiredModal(false)}>Cancel</button>
-              <button className="btn-primary" onClick={launchChromiumAuth}>
+              <button className="btn-primary" onClick={launchChromiumAuth} disabled={actionLoading || checkingStatus}>
                 <Globe size={16} /> Launch Interactive Login Browser
               </button>
             </div>

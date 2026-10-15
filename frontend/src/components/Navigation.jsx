@@ -16,11 +16,15 @@ import {
   X,
   Wallet
 } from 'lucide-react';
+import MoneyLoader from './MoneyLoader';
 
 export default function Navigation({ 
   activeTab, 
   setActiveTab, 
   notebookLmConnected,
+  notebookLmConnecting,
+  notebookDetails,
+  loadingNotebookDetails,
   profiles,
   activeProfile,
   onSwitchProfile,
@@ -290,21 +294,42 @@ export default function Navigation({
       </div>
 
       {/* NotebookLM Status Badge */}
-      <div className="glass-card" style={{ padding: '0.75rem' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.25rem' }}>
-          <Bot size={15} color="#818cf8" />
-          <span style={{ fontSize: '0.8rem', fontWeight: 600 }}>NotebookLM AI</span>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+      <div className="glass-card" style={{ padding: '0.75rem', borderColor: notebookLmConnected ? 'rgba(16, 185, 129, 0.3)' : 'rgba(245, 158, 11, 0.3)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.3rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+            <Bot size={15} color={notebookLmConnected ? '#34d399' : '#f59e0b'} />
+            <span style={{ fontSize: '0.8rem', fontWeight: 600, color: 'white' }}>NotebookLM AI</span>
+          </div>
           <span style={{
             width: '8px',
             height: '8px',
             borderRadius: '50%',
-            background: notebookLmConnected ? '#10b981' : '#f59e0b'
+            background: notebookLmConnecting ? '#38bdf8' : notebookLmConnected ? '#10b981' : (loadingNotebookDetails ? '#38bdf8' : '#f59e0b'),
+            boxShadow: notebookLmConnected ? '0 0 8px rgba(16, 185, 129, 0.6)' : 'none'
           }} />
-          <span style={{ fontSize: '0.75rem', color: '#cbd5e1' }}>
-            {notebookLmConnected ? 'Chromium Connected' : 'Auth Required'}
-          </span>
+        </div>
+        <div style={{ fontSize: '0.75rem' }}>
+          {notebookLmConnecting ? (
+            <span style={{ color: '#38bdf8', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+              <MoneyLoader size={12} /> Connecting...
+            </span>
+          ) : notebookLmConnected ? (
+            <div>
+              <span style={{ color: '#34d399', fontWeight: 600 }}>Connected</span>
+              {loadingNotebookDetails && (
+                <span style={{ color: '#38bdf8', fontSize: '0.7rem', marginLeft: '0.35rem' }}>Syncing...</span>
+              )}
+              {notebookDetails && (
+                <div style={{ color: '#94a3b8', fontSize: '0.7rem', marginTop: '0.2rem', lineHeight: 1.3 }}>
+                  <span style={{ color: '#38bdf8' }}>{notebookDetails.sources?.length || 0}</span> Sources · <span style={{ color: '#34d399' }}>{notebookDetails.notes?.length || 0}</span> Notes · <span style={{ color: '#f43f5e' }}>{notebookDetails.artifacts?.length || 0}</span> Artifacts
+                </div>
+              )}
+            </div>
+          ) : (
+            <span style={{ color: '#f59e0b' }}>
+              {loadingNotebookDetails ? 'Connecting...' : 'Auth Required'}
+            </span>
+          )}
         </div>
       </div>
     </aside>

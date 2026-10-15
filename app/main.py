@@ -23,6 +23,32 @@ async def lifespan(app: FastAPI):
     # Startup: initialize database tables for all profiles
     await init_all_profiles()
     print("[Home Finance BookLM Backend] Database initialized successfully for all profiles.")
+
+    # Connect to NotebookLM and warm up notebook details cache for active profile in background.
+    # Nothing here is awaited, so the API starts serving immediately; the UI polls
+    # /api/notebooklm/connection-state to show a "connecting" indicator meanwhile.
+    try:
+        import asyncio
+        from app.services.notebooklm_service import notebooklm_service
+        from app.services.profile_manager import profile_manager
+        from app.services.ocr_service import get_tesseract_config
+        active_id = profile_manager.get_active_profile_id()
+
+        async def _startup_warmup():
+            # Run the connection check first, then the prefetch, so the two don't
+            # open concurrent clients on the same storage_state.json.
+            try:
+                await notebooklm_service.start_background_connect(active_id)
+            except Exception as e:
+                print(f"[Startup Connect Error]: {e}")
+            await notebooklm_service.prefetch_active_profile_notebook(active_id)
+
+        asyncio.create_task(_startup_warmup())
+        # Detect local Tesseract (Hebrew OCR fallback) off the event loop and log its status
+        asyncio.create_task(asyncio.to_thread(get_tesseract_config))
+    except Exception as e:
+        print(f"[Startup Prefetch Error]: {e}")
+
     yield
     # Shutdown
     print("[Home Finance BookLM Backend] Shutting down cleanly.")

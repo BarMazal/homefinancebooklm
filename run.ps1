@@ -21,6 +21,18 @@ function Stop-PortProcesses($port) {
     }
 }
 
+# Dummy-proof check: Hebrew/English receipt OCR (Tesseract) must be installed
+& powershell -ExecutionPolicy Bypass -File .\install_ocr.ps1 -CheckOnly
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "[!] Hebrew receipt OCR (Tesseract) is not installed - Hebrew receipts can't be read without it." -ForegroundColor Yellow
+    $answer = Read-Host "    Install it now? [Y/n]"
+    if ($answer -eq "" -or $answer -match "^[Yy]") {
+        & powershell -ExecutionPolicy Bypass -File .\install_ocr.ps1
+    } else {
+        Write-Host "    Skipped. You can install it later from the Receipts page or by running install_ocr.ps1." -ForegroundColor DarkYellow
+    }
+}
+
 # Stop any existing processes on ports 8910 and 5190
 Stop-PortProcesses $backendPort
 Stop-PortProcesses $frontendPort

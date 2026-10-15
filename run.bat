@@ -3,6 +3,13 @@ echo ===================================================
 echo   Starting Home Finance BookLM Application
 echo ===================================================
 
+powershell -ExecutionPolicy Bypass -File "%~dp0install_ocr.ps1" -CheckOnly
+if errorlevel 1 (
+    echo [!] Hebrew receipt OCR ^(Tesseract^) is not installed - Hebrew receipts can't be read without it.
+    choice /C YN /M "    Install it now"
+    if not errorlevel 2 powershell -ExecutionPolicy Bypass -File "%~dp0install_ocr.ps1"
+)
+
 echo Cleaning up previous server instances on ports 8910 and 5190...
 for /f "tokens=5" %%a in ('netstat -aon ^| findstr :8910 ^| findstr LISTENING') do taskkill /f /t /pid %%a >nul 2>&1
 for /f "tokens=5" %%a in ('netstat -aon ^| findstr :5190 ^| findstr LISTENING') do taskkill /f /t /pid %%a >nul 2>&1

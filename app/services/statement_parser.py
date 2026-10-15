@@ -55,11 +55,13 @@ def guess_category(merchant: str) -> str:
     if not merchant:
         return "Other Expenses"
     m_lower = merchant.lower()
+    # Longest matching keyword wins, so e.g. "סופר-פארם" (Health) beats the generic "סופר" (Groceries)
+    best_cat, best_len = "Other Expenses", 0
     for cat, keywords in CATEGORY_KEYWORDS.items():
         for kw in keywords:
-            if kw.lower() in m_lower:
-                return cat
-    return "Other Expenses"
+            if kw.lower() in m_lower and len(kw) > best_len:
+                best_cat, best_len = cat, len(kw)
+    return best_cat
 
 def normalize_date(d_str: str) -> Optional[str]:
     if not d_str:

@@ -56,6 +56,25 @@ async def get_notebooklm_status(request: Request):
             "traceback": traceback.format_exc()
         }
 
+@router.get("/connection-state")
+async def get_connection_state(request: Request):
+    """
+    Returns instantly with the background connection state for the active profile:
+    'connecting' while the check runs, then 'connected' or 'disconnected'.
+    """
+    profile_id = get_request_profile_id(request)
+    return notebooklm_service.get_connection_state(profile_id)
+
+@router.post("/connect")
+async def start_connect(request: Request):
+    """
+    (Re)starts a background connection check (bypassing the status cache) and returns
+    immediately. Poll /connection-state until state is no longer 'connecting'.
+    """
+    profile_id = get_request_profile_id(request)
+    notebooklm_service.start_background_connect(profile_id, force=True)
+    return notebooklm_service.get_connection_state(profile_id)
+
 @router.post("/import-system-session")
 async def import_system_session():
     return {
@@ -79,13 +98,30 @@ async def list_notebooks(request: Request):
     result = await notebooklm_service.list_notebooks(profile_id)
     return result
 
+@router.get("/active-notebook-details")
+async def get_active_notebook_details(
+    force_refresh: bool = Query(False),
+    request: Request = None
+):
+    """
+    Returns resources (sources), notes, and artifacts inside the active profile's linked notebook.
+    Uses instantaneous memory/disk cache when available.
+    """
+    profile_id = get_request_profile_id(request)
+    result = await notebooklm_service.get_active_notebook_details(profile_id, force_refresh=force_refresh)
+    return result
+
 @router.get("/notebooks/{notebook_id}/details")
-async def get_notebook_details(notebook_id: str, request: Request):
+async def get_notebook_details(
+    notebook_id: str,
+    force_refresh: bool = Query(False),
+    request: Request = None
+):
     """
     Returns resources (sources), notes, and artifacts inside the chosen notebook.
     """
     profile_id = get_request_profile_id(request)
-    result = await notebooklm_service.get_notebook_details(notebook_id, profile_id)
+    result = await notebooklm_service.get_notebook_details(notebook_id, profile_id, force_refresh=force_refresh)
     return result
 
 @router.get("/notebooks/{notebook_id}/source/{source_id}/fulltext")

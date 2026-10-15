@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Upload, CheckCircle2, AlertCircle, FileText, Trash2, Eye, ShieldAlert } from 'lucide-react';
 import axios from 'axios';
+import MoneyLoader from './MoneyLoader';
 
 const API_BASE = 'http://127.0.0.1:8910';
 
@@ -11,6 +12,9 @@ export default function ReceiptsView({ activeProfileId }) {
   const [loading, setLoading] = useState(true);
 
   const [selectedReceipt, setSelectedReceipt] = useState(null);
+  // Local Hebrew/English OCR (Tesseract) availability; null until checked
+  const [ocrStatus, setOcrStatus] = useState(null);
+  const [ocrInstalling, setOcrInstalling] = useState(false);
   const [editForm, setEditForm] = useState({
     merchant: '',
     amount: 0,
@@ -29,6 +33,32 @@ export default function ReceiptsView({ activeProfileId }) {
       .catch(() => setPendingReceipts([]))
       .finally(() => setLoading(false));
   }, [activeProfileId]);
+
+  const fetchOcrStatus = (refresh = false) =>
+    axios.get(`${API_BASE}/api/receipts/ocr-status${refresh ? '?refresh=true' : ''}`)
+      .then(res => { setOcrStatus(res.data); return res.data; })
+      .catch(() => null);
+
+  useEffect(() => { fetchOcrStatus(); }, []);
+
+  const handleInstallOcr = async () => {
+    setOcrInstalling(true);
+    try {
+      await axios.post(`${API_BASE}/api/receipts/install-ocr`);
+    } catch (err) {
+      setOcrInstalling(false);
+      alert('Could not start the OCR installer: ' + err.message + '\nRun install_ocr.ps1 from the project folder instead.');
+      return;
+    }
+    // Poll until the installer window finishes, then re-detect Tesseract
+    const poll = setInterval(async () => {
+      const st = await fetchOcrStatus(true);
+      if (st && !st.installing) {
+        clearInterval(poll);
+        setOcrInstalling(false);
+      }
+    }, 3000);
+  };
 
   const handleFileUpload = async (e) => {
     const uploadedFile = e.target.files[0];
@@ -89,6 +119,26 @@ export default function ReceiptsView({ activeProfileId }) {
         <p style={{ color: '#94a3b8', fontSize: '0.9rem' }}>Dual local OCR + AI parsing with confidence validation and auto-purging</p>
       </div>
 
+      {/* Local Hebrew OCR missing: dummy-proof install prompt */}
+      {ocrStatus && !ocrStatus.hebrew && (
+        <div className="glass-panel" style={{ padding: '1.1rem 1.4rem', borderColor: 'rgba(245, 158, 11, 0.5)', background: 'rgba(245, 158, 11, 0.08)', display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
+          <AlertCircle size={22} color="#f59e0b" />
+          <div style={{ flex: 1, minWidth: '240px' }}>
+            <div style={{ color: '#fbbf24', fontWeight: 600 }}>Hebrew receipt OCR is not installed</div>
+            <div style={{ color: '#cbd5e1', fontSize: '0.85rem' }}>
+              {ocrInstalling
+                ? 'Installing Tesseract OCR in a separate window - approve the Windows prompt if one appears...'
+                : 'Receipts are read locally with Tesseract (Hebrew + English). Without it, uploaded receipts will not be read.'}
+            </div>
+          </div>
+          {ocrInstalling ? (
+            <MoneyLoader size={22} counting />
+          ) : (
+            <button className="btn-primary" onClick={handleInstallOcr}>Install Hebrew OCR</button>
+          )}
+        </div>
+      )}
+
       {/* Upload Zone */}
       <div className="glass-panel" style={{ padding: '2.5rem', textAlign: 'center', borderStyle: 'dashed', borderWidth: '2px' }}>
         <input 
@@ -96,6 +146,7 @@ export default function ReceiptsView({ activeProfileId }) {
           id="receipt-upload" 
           accept="image/*,.pdf" 
           onChange={handleFileUpload} 
+          disabled={uploading}
           style={{ display: 'none' }} 
         />
         <label htmlFor="receipt-upload" style={{ cursor: 'pointer', display: 'inline-block' }}>
@@ -113,7 +164,12 @@ export default function ReceiptsView({ activeProfileId }) {
           </div>
           <h3 style={{ color: 'white', fontSize: '1.2rem', marginBottom: '0.5rem' }}>Drop receipt image or click to upload</h3>
           <p style={{ color: '#94a3b8', fontSize: '0.85rem' }}>Supports PNG, JPG, WEBP, and PDF files. Auto-extracts merchant, total, date, and line items.</p>
-          {uploading && <p style={{ color: '#34d399', fontWeight: 600, marginTop: '0.5rem' }}>Processing OCR & confidence scoring...</p>}
+          {uploading && (
+            <div style={{ color: '#34d399', fontWeight: 600, marginTop: '0.75rem', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.4rem' }}>
+              <MoneyLoader size={24} counting />
+              <span>Reading receipt (Hebrew + English) and filing it in your NotebookLM notebook... this can take up to a minute.</span>
+            </div>
+          )}
         </label>
       </div>
 

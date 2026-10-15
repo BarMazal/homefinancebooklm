@@ -1,4 +1,5 @@
 import os
+import asyncio
 import shutil
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Request
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -9,11 +10,21 @@ from datetime import datetime
 from app.database import get_db
 from app.models import Receipt, Transaction, Account
 from app.schemas import ReceiptResponse, ReceiptConfirm
-from app.services.ocr_service import process_receipt_ocr
+from app.services.ocr_service import process_receipt_ocr, get_ocr_status, start_ocr_install
 
 from app.services.profile_manager import profile_manager, get_request_profile_id
 
 router = APIRouter(prefix="/api/receipts", tags=["Receipts"])
+
+@router.get("/ocr-status")
+async def ocr_status(refresh: bool = False):
+    """Whether local Hebrew/English OCR (Tesseract) is installed; refresh=true re-detects."""
+    return await asyncio.to_thread(get_ocr_status, refresh)
+
+@router.post("/install-ocr")
+async def install_ocr():
+    """Launches install_ocr.ps1 (Tesseract + Hebrew/English data) in a visible window."""
+    return start_ocr_install()
 
 @router.post("/upload", response_model=ReceiptResponse)
 async def upload_receipt(request: Request, file: UploadFile = File(...), db: AsyncSession = Depends(get_db)):
@@ -26,8 +37,9 @@ async def upload_receipt(request: Request, file: UploadFile = File(...), db: Asy
     with open(file_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
 
-    # Run OCR processing engine
-    parsed = process_receipt_ocr(file_path)
+    # Run OCR processing engine (NotebookLM first, local Tesseract fallback; non-blocking)
+    parsed = await process_receipt_ocr(file_path, active_profile_id)
+    print(f"[Receipts] OCR engine: {parsed.get('ocr_engine')} | merchant={ascii(parsed['merchant'])} amount={parsed['amount']} date={parsed['date']}")
 
     db_receipt = Receipt(
         file_path=file_path,
