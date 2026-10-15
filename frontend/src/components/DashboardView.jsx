@@ -3,7 +3,10 @@ import {
   PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend,
   BarChart, Bar, XAxis, YAxis, CartesianGrid
 } from 'recharts';
-import { RefreshCw, FolderPlus, CreditCard, Wallet, TrendingUp } from 'lucide-react';
+import { 
+  RefreshCw, FolderPlus, CreditCard, Wallet, TrendingUp, 
+  Calendar, Sliders, RotateCcw, ArrowUpRight, BarChart2 
+} from 'lucide-react';
 import axios from 'axios';
 
 const API_BASE = 'http://127.0.0.1:8910';
@@ -12,22 +15,90 @@ export default function DashboardView({ fxRate, activeProfileId, activeProfileNa
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
 
+  // Filter Toolbar State
+  const [granularity, setGranularity] = useState('monthly'); // 'monthly' | 'yearly'
+  const [preset, setPreset] = useState('all'); // 'all' | 'last_year' | 'last_month' | 'last_6_months' | 'ytd' | '3_years' | '5_years' | 'custom'
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+
+  const formatDateISO = (d) => {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  };
+
+  const handlePresetChange = (newPreset) => {
+    setPreset(newPreset);
+    const now = new Date();
+
+    if (newPreset === 'all') {
+      setStartDate('');
+      setEndDate('');
+    } else if (newPreset === 'last_month') {
+      // 1st of prior month to last day of prior month
+      const start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      const end = new Date(now.getFullYear(), now.getMonth(), 0);
+      setStartDate(formatDateISO(start));
+      setEndDate(formatDateISO(end));
+    } else if (newPreset === 'last_6_months') {
+      const start = new Date(now.getFullYear(), now.getMonth() - 6, 1);
+      setStartDate(formatDateISO(start));
+      setEndDate(formatDateISO(now));
+    } else if (newPreset === 'last_year') {
+      const start = new Date(now.getFullYear() - 1, now.getMonth(), 1);
+      setStartDate(formatDateISO(start));
+      setEndDate(formatDateISO(now));
+    } else if (newPreset === 'ytd') {
+      const start = new Date(now.getFullYear(), 0, 1);
+      setStartDate(formatDateISO(start));
+      setEndDate(formatDateISO(now));
+    } else if (newPreset === '3_years') {
+      const start = new Date(now.getFullYear() - 3, now.getMonth(), 1);
+      setStartDate(formatDateISO(start));
+      setEndDate(formatDateISO(now));
+    } else if (newPreset === '5_years') {
+      const start = new Date(now.getFullYear() - 5, now.getMonth(), 1);
+      setStartDate(formatDateISO(start));
+      setEndDate(formatDateISO(now));
+    }
+  };
+
+  const handleCustomDateChange = (type, val) => {
+    setPreset('custom');
+    if (type === 'start') {
+      setStartDate(val);
+    } else {
+      setEndDate(val);
+    }
+  };
+
+  const handleResetFilters = () => {
+    setGranularity('monthly');
+    setPreset('all');
+    setStartDate('');
+    setEndDate('');
+  };
+
   useEffect(() => {
     if (!activeProfileId) return;
-    setData(null);
     setLoading(true);
+
+    const params = { granularity };
+    if (startDate) params.start_date = startDate;
+    if (endDate) params.end_date = endDate;
+
     axios.get(`${API_BASE}/api/dashboard/overview`, {
-      headers: { 'X-Profile-Id': activeProfileId }
+      headers: { 'X-Profile-Id': activeProfileId },
+      params
     })
       .then(res => setData(res.data))
       .catch(() => setData(null))
       .finally(() => setLoading(false));
-  }, [activeProfileId]);
+  }, [activeProfileId, granularity, startDate, endDate]);
 
   const expenseCuts = data?.expense_cuts || [];
   const monthlyCashFlow = data?.monthly_cashflow || [];
-  const uploadStatus = data?.upload_status || [];
-
   const totalExpenseSum = expenseCuts.reduce((acc, curr) => acc + curr.value, 0);
 
   const CustomPieTooltip = ({ active, payload }) => {
@@ -46,7 +117,40 @@ export default function DashboardView({ fxRate, activeProfileId, activeProfileNa
     return null;
   };
 
+  const CustomCashflowTooltip = ({ active, payload, label }) => {
+    if (active && payload && payload.length) {
+      const inc = payload.find(p => p.dataKey === 'Income')?.value || 0;
+      const exp = payload.find(p => p.dataKey === 'Expense')?.value || 0;
+      const net = inc - exp;
+      return (
+        <div style={{ background: '#1e293b', border: '1px solid rgba(255,255,255,0.15)', padding: '0.75rem 1rem', borderRadius: '8px', color: 'white', boxShadow: '0 4px 16px rgba(0,0,0,0.5)' }}>
+          <p style={{ fontWeight: 700, margin: '0 0 0.4rem', fontSize: '0.95rem', color: '#f8fafc', borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '0.3rem' }}>
+            {label}
+          </p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem', fontSize: '0.85rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem' }}>
+              <span style={{ color: '#94a3b8' }}>Inflow (Income):</span>
+              <span style={{ color: '#10b981', fontWeight: 600 }}>₪ {inc.toLocaleString()}</span>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem' }}>
+              <span style={{ color: '#94a3b8' }}>Outflow (Expenses):</span>
+              <span style={{ color: '#f43f5e', fontWeight: 600 }}>₪ {exp.toLocaleString()}</span>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', marginTop: '0.3rem', paddingTop: '0.3rem', borderTop: '1px dashed rgba(255,255,255,0.1)' }}>
+              <span style={{ color: '#cbd5e1' }}>Net Savings:</span>
+              <span style={{ color: net >= 0 ? '#34d399' : '#fb7185', fontWeight: 700 }}>
+                {net >= 0 ? '+' : ''}₪ {net.toLocaleString()}
+              </span>
+            </div>
+          </div>
+        </div>
+      );
+    }
+    return null;
+  };
+
   const isCleanSlate = (!loading && data && data.total_net_worth === 0 && expenseCuts.length === 0);
+  const isFiltersDirty = (granularity !== 'monthly' || preset !== 'all' || startDate !== '' || endDate !== '');
 
   return (
     <div style={{ padding: '2rem', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
@@ -59,7 +163,170 @@ export default function DashboardView({ fxRate, activeProfileId, activeProfileNa
         <div className="glass-card" style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.6rem 1rem' }}>
           <RefreshCw size={16} color="#34d399" />
           <span style={{ fontSize: '0.85rem', color: '#94a3b8' }}>USD / ILS FX:</span>
-          <span style={{ fontWeight: 700, color: '#34d399', fontSize: '1.05rem' }}>₪ {fxRate ? fxRate.toFixed(2) : (data?.fx_rate ? data.fx_rate.toFixed(2) : '3.65')}</span>
+          <span style={{ fontWeight: 700, color: '#34d399', fontSize: '1.05rem' }}>
+            ₪ {fxRate ? fxRate.toFixed(2) : (data?.fx_rate ? data.fx_rate.toFixed(2) : '3.65')}
+          </span>
+        </div>
+      </div>
+
+      {/* Interactive Filter Toolbar */}
+      <div className="glass-panel" style={{ 
+        padding: '0.85rem 1.25rem', 
+        display: 'flex', 
+        flexWrap: 'wrap', 
+        alignItems: 'center', 
+        justifyContent: 'space-between',
+        gap: '1rem',
+        background: 'rgba(15, 23, 42, 0.75)',
+        border: '1px solid rgba(255, 255, 255, 0.1)'
+      }}>
+        {/* Left: Granularity Toggle Pills */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+          <span style={{ color: '#94a3b8', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.35rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+            <BarChart2 size={15} color="#818cf8" /> View:
+          </span>
+          <div style={{ display: 'inline-flex', background: 'rgba(0, 0, 0, 0.35)', padding: '3px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.08)' }}>
+            <button
+              onClick={() => setGranularity('monthly')}
+              style={{
+                padding: '0.4rem 0.85rem',
+                fontSize: '0.82rem',
+                fontWeight: granularity === 'monthly' ? 700 : 500,
+                color: granularity === 'monthly' ? '#ffffff' : '#94a3b8',
+                background: granularity === 'monthly' ? 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)' : 'transparent',
+                border: 'none',
+                borderRadius: '6px',
+                cursor: 'pointer',
+                transition: 'all 0.2s ease',
+                boxShadow: granularity === 'monthly' ? '0 2px 8px rgba(99, 102, 241, 0.4)' : 'none'
+              }}
+            >
+              Monthly
+            </button>
+            <button
+              onClick={() => setGranularity('yearly')}
+              style={{
+                padding: '0.4rem 0.85rem',
+                fontSize: '0.82rem',
+                fontWeight: granularity === 'yearly' ? 700 : 500,
+                color: granularity === 'yearly' ? '#ffffff' : '#94a3b8',
+                background: granularity === 'yearly' ? 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)' : 'transparent',
+                border: 'none',
+                borderRadius: '6px',
+                cursor: 'pointer',
+                transition: 'all 0.2s ease',
+                boxShadow: granularity === 'yearly' ? '0 2px 8px rgba(99, 102, 241, 0.4)' : 'none'
+              }}
+            >
+              Yearly
+            </button>
+          </div>
+        </div>
+
+        {/* Right: Period Preset Combobox & Date Pickers */}
+        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '0.75rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+            <Calendar size={15} color="#94a3b8" />
+            <select
+              value={preset}
+              onChange={(e) => handlePresetChange(e.target.value)}
+              style={{
+                background: '#1e293b',
+                color: '#f8fafc',
+                border: '1px solid rgba(255,255,255,0.15)',
+                padding: '0.45rem 0.8rem',
+                borderRadius: '6px',
+                fontSize: '0.83rem',
+                fontWeight: 500,
+                cursor: 'pointer',
+                outline: 'none'
+              }}
+            >
+              <option value="all">All History</option>
+              <option value="last_year">Last 1 Year (12M)</option>
+              <option value="last_month">Last Month</option>
+              <option value="last_6_months">Last 6 Months</option>
+              <option value="ytd">Year to Date (YTD)</option>
+              <option value="3_years">3 Years</option>
+              <option value="5_years">5 Years</option>
+              <option value="custom">Custom Range</option>
+            </select>
+          </div>
+
+          {/* Date Picker: From */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+            <span style={{ fontSize: '0.78rem', color: '#94a3b8' }}>From:</span>
+            <input
+              type="date"
+              value={startDate}
+              onChange={(e) => handleCustomDateChange('start', e.target.value)}
+              style={{
+                background: '#1e293b',
+                color: '#f8fafc',
+                border: '1px solid rgba(255,255,255,0.15)',
+                padding: '0.4rem 0.65rem',
+                borderRadius: '6px',
+                fontSize: '0.82rem',
+                outline: 'none'
+              }}
+            />
+          </div>
+
+          {/* Date Picker: To */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+            <span style={{ fontSize: '0.78rem', color: '#94a3b8' }}>To:</span>
+            <input
+              type="date"
+              value={endDate}
+              onChange={(e) => handleCustomDateChange('end', e.target.value)}
+              style={{
+                background: '#1e293b',
+                color: '#f8fafc',
+                border: '1px solid rgba(255,255,255,0.15)',
+                padding: '0.4rem 0.65rem',
+                borderRadius: '6px',
+                fontSize: '0.82rem',
+                outline: 'none'
+              }}
+            />
+          </div>
+
+          {/* Reset button */}
+          {isFiltersDirty && (
+            <button
+              onClick={handleResetFilters}
+              title="Reset to All History"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.3rem',
+                background: 'rgba(255,255,255,0.06)',
+                border: '1px solid rgba(255,255,255,0.15)',
+                color: '#94a3b8',
+                padding: '0.4rem 0.7rem',
+                borderRadius: '6px',
+                fontSize: '0.78rem',
+                cursor: 'pointer'
+              }}
+            >
+              <RotateCcw size={13} /> Reset
+            </button>
+          )}
+
+          {/* Active Period Label Badge */}
+          {data?.target_month_label && (
+            <div style={{
+              background: 'rgba(99, 102, 241, 0.12)',
+              border: '1px solid rgba(99, 102, 241, 0.3)',
+              borderRadius: '6px',
+              padding: '0.35rem 0.65rem',
+              color: '#a5b4fc',
+              fontSize: '0.78rem',
+              fontWeight: 600
+            }}>
+              {data.target_month_label}
+            </div>
+          )}
         </div>
       </div>
 
@@ -77,8 +344,9 @@ export default function DashboardView({ fxRate, activeProfileId, activeProfileNa
         </div>
       )}
 
-      {/* Summary KPI Cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1rem' }}>
+      {/* Summary KPI Cards with Option A (Monthly Run-Rate & Total Period Burn) */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(230px, 1fr))', gap: '1rem' }}>
+        {/* Net Worth */}
         <div className="glass-panel" style={{ padding: '1.25rem', position: 'relative' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span style={{ color: '#94a3b8', fontSize: '0.85rem' }}>Total Net Worth</span>
@@ -99,40 +367,70 @@ export default function DashboardView({ fxRate, activeProfileId, activeProfileNa
               </button>
             )}
           </div>
-          <h2 style={{ fontSize: '1.8rem', color: (data?.total_net_worth || 0) >= 0 ? 'white' : '#fb7185', marginTop: '0.25rem' }}>
-            ₪ {data ? data.total_net_worth.toLocaleString() : '0'}
+          <h2 style={{ fontSize: '1.8rem', color: (data?.total_net_worth || 0) >= 0 ? 'white' : '#fb7185', marginTop: '0.25rem', fontWeight: 700 }}>
+            ₪ {data ? Math.round(data.total_net_worth).toLocaleString() : '0'}
           </h2>
           <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
-            {data?.total_net_worth < 0 ? 'Raw ledger sum without opening balances' : 'Consolidated Assets & Debt'}
+            Consolidated Assets & Debt (Real-time)
           </span>
         </div>
 
+        {/* Monthly Net Savings (Option A) */}
         <div className="glass-panel" style={{ padding: '1.25rem' }}>
-          <span style={{ color: '#94a3b8', fontSize: '0.85rem' }}>Monthly Net Savings</span>
-          <h2 style={{ fontSize: '1.8rem', color: (data?.monthly_net_savings || 0) >= 0 ? '#34d399' : '#fb7185', marginTop: '0.25rem' }}>
-            ₪ {data ? data.monthly_net_savings.toLocaleString() : '0'}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span style={{ color: '#94a3b8', fontSize: '0.85rem' }}>Monthly Net Savings</span>
+            {data?.is_multi_month && (
+              <span style={{ fontSize: '0.7rem', color: '#818cf8', background: 'rgba(99, 102, 241, 0.15)', padding: '0.15rem 0.4rem', borderRadius: '4px' }}>
+                Run-Rate
+              </span>
+            )}
+          </div>
+          <h2 style={{ 
+            fontSize: '1.8rem', 
+            color: (data?.monthly_net_savings_avg || 0) >= 0 ? '#34d399' : '#fb7185', 
+            marginTop: '0.25rem',
+            fontWeight: 700
+          }}>
+            ₪ {data ? Math.round(data.monthly_net_savings_avg).toLocaleString() : '0'}
+            {data?.is_multi_month && <span style={{ fontSize: '0.95rem', fontWeight: 500, color: '#94a3b8', marginLeft: '0.25rem' }}>/mo avg</span>}
           </h2>
-          <span style={{ fontSize: '0.75rem', color: '#34d399' }}>
-            {data?.target_month_label ? `Period: ${data.target_month_label}` : 'Active Savings Rate'}
+          <span style={{ fontSize: '0.75rem', color: '#94a3b8', display: 'block', marginTop: '0.1rem' }}>
+            {data?.is_multi_month 
+              ? `₪ ${Math.round(data.total_net_savings_period || 0).toLocaleString()} total net savings (${data.months_count} mos)`
+              : (data?.target_month_label ? `Period: ${data.target_month_label}` : 'Active Savings Rate')
+            }
           </span>
         </div>
 
+        {/* Monthly Total Expenses (Option A) */}
         <div className="glass-panel" style={{ padding: '1.25rem' }}>
-          <span style={{ color: '#94a3b8', fontSize: '0.85rem' }}>Monthly Total Expenses</span>
-          <h2 style={{ fontSize: '1.8rem', color: '#fb7185', marginTop: '0.25rem' }}>
-            ₪ {data ? data.monthly_expenses.toLocaleString() : '0'}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span style={{ color: '#94a3b8', fontSize: '0.85rem' }}>Monthly Total Expenses</span>
+            {data?.is_multi_month && (
+              <span style={{ fontSize: '0.7rem', color: '#f43f5e', background: 'rgba(244, 63, 94, 0.15)', padding: '0.15rem 0.4rem', borderRadius: '4px' }}>
+                Run-Rate
+              </span>
+            )}
+          </div>
+          <h2 style={{ fontSize: '1.8rem', color: '#fb7185', marginTop: '0.25rem', fontWeight: 700 }}>
+            ₪ {data ? Math.round(data.monthly_expenses_avg).toLocaleString() : '0'}
+            {data?.is_multi_month && <span style={{ fontSize: '0.95rem', fontWeight: 500, color: '#94a3b8', marginLeft: '0.25rem' }}>/mo avg</span>}
           </h2>
-          <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
-            {data?.target_month_label ? `Period: ${data.target_month_label} (Excl. Transfers)` : 'Living Expenses'}
+          <span style={{ fontSize: '0.75rem', color: '#94a3b8', display: 'block', marginTop: '0.1rem' }}>
+            {data?.is_multi_month 
+              ? `₪ ${Math.round(data.total_expenses_period || 0).toLocaleString()} total burn (${data.months_count} mos)`
+              : (data?.target_month_label ? `Period: ${data.target_month_label} (Excl. Transfers)` : 'Living Expenses')
+            }
           </span>
         </div>
 
+        {/* Portfolios XIRR */}
         <div className="glass-panel" style={{ padding: '1.25rem', position: 'relative' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span style={{ color: '#94a3b8', fontSize: '0.85rem' }}>Portfolios XIRR (Annual)</span>
             {setActiveTab && (
               <button 
-                onClick={() => setActiveTab('accounts')}
+                onClick={() => setActiveTab('investments')}
                 style={{ 
                   background: 'rgba(99, 102, 241, 0.15)', 
                   border: '1px solid rgba(99, 102, 241, 0.3)', 
@@ -143,15 +441,15 @@ export default function DashboardView({ fxRate, activeProfileId, activeProfileNa
                   cursor: 'pointer' 
                 }}
               >
-                Configure Accounts ↗
+                View Portfolios ↗
               </button>
             )}
           </div>
-          <h2 style={{ fontSize: '1.8rem', color: '#818cf8', marginTop: '0.25rem' }}>
+          <h2 style={{ fontSize: '1.8rem', color: '#818cf8', marginTop: '0.25rem', fontWeight: 700 }}>
             {data ? data.portfolio_xirr.toFixed(2) : '0.00'} %
           </h2>
           <span style={{ fontSize: '0.8rem', color: '#94a3b8' }}>
-            {data?.portfolio_xirr ? 'Weighted Savings + Stocks' : 'Requires Investment Account'}
+            {data?.portfolio_xirr ? 'Annualized Internal Rate of Return' : 'Requires Investment Account'}
           </span>
         </div>
       </div>
@@ -160,10 +458,17 @@ export default function DashboardView({ fxRate, activeProfileId, activeProfileNa
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
         {/* Donut Chart: Expense Cuts */}
         <div className="glass-panel" style={{ padding: '1.5rem' }}>
-          <h3 style={{ fontSize: '1.1rem', color: 'white', marginBottom: '1rem' }}>Expense Cuts by Category</h3>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+            <div>
+              <h3 style={{ fontSize: '1.1rem', color: 'white', margin: 0, fontWeight: 600 }}>Expense Cuts by Category</h3>
+              <p style={{ fontSize: '0.78rem', color: '#94a3b8', margin: '0.2rem 0 0' }}>
+                Total: ₪ {Math.round(totalExpenseSum).toLocaleString()} {data?.target_month_label ? `(${data.target_month_label})` : ''}
+              </p>
+            </div>
+          </div>
           {expenseCuts.length === 0 ? (
             <div className="glass-card" style={{ textAlign: 'center', padding: '3rem', color: '#94a3b8' }}>
-              No expenses recorded in active profile database.
+              No expenses recorded in the selected period.
             </div>
           ) : (
             <div style={{ width: '100%', height: 280 }}>
@@ -182,30 +487,39 @@ export default function DashboardView({ fxRate, activeProfileId, activeProfileNa
                     ))}
                   </Pie>
                   <Tooltip content={<CustomPieTooltip />} />
-                  <Legend formatter={(value) => <span style={{ color: '#cbd5e1', fontSize: '0.85rem' }}>{value}</span>} />
+                  <Legend formatter={(value) => <span style={{ color: '#cbd5e1', fontSize: '0.82rem' }}>{value}</span>} />
                 </PieChart>
               </ResponsiveContainer>
             </div>
           )}
         </div>
 
-        {/* Bar Chart: Monthly Income vs Expenses */}
+        {/* Bar Chart: Cash Flow */}
         <div className="glass-panel" style={{ padding: '1.5rem' }}>
-          <h3 style={{ fontSize: '1.1rem', color: 'white', marginBottom: '1rem' }}>Monthly Cash Flow (Income vs Expenses)</h3>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+            <div>
+              <h3 style={{ fontSize: '1.1rem', color: 'white', margin: 0, fontWeight: 600 }}>
+                {granularity === 'yearly' ? 'Annual Cash Flow (Yearly Inflows vs Outflows)' : 'Monthly Cash Flow (Inflows vs Outflows)'}
+              </h3>
+              <p style={{ fontSize: '0.78rem', color: '#94a3b8', margin: '0.2rem 0 0' }}>
+                Showing {monthlyCashFlow.length} {granularity === 'yearly' ? 'years' : 'months'} in period
+              </p>
+            </div>
+          </div>
           {monthlyCashFlow.length === 0 ? (
             <div className="glass-card" style={{ textAlign: 'center', padding: '3rem', color: '#94a3b8' }}>
-              No monthly cash flow logged in active profile database.
+              No cash flow logged in the selected period.
             </div>
           ) : (
             <div style={{ width: '100%', height: 280 }}>
               <ResponsiveContainer>
                 <BarChart data={monthlyCashFlow}>
                   <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
-                  <XAxis dataKey="month" stroke="#94a3b8" />
+                  <XAxis dataKey="period" stroke="#94a3b8" />
                   <YAxis stroke="#94a3b8" />
-                  <Tooltip contentStyle={{ background: '#1e293b', borderColor: 'rgba(255,255,255,0.1)', borderRadius: '8px' }} />
-                  <Bar dataKey="Income" fill="#10b981" radius={[4, 4, 0, 0]} />
-                  <Bar dataKey="Expense" fill="#f43f5e" radius={[4, 4, 0, 0]} />
+                  <Tooltip content={<CustomCashflowTooltip />} />
+                  <Bar dataKey="Income" name="Income" fill="#10b981" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="Expense" name="Expense" fill="#f43f5e" radius={[4, 4, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
